@@ -5,7 +5,7 @@
 - Translate transcript insights and market data into keyword clusters and channel tactics.
 
 ## Research Inputs
-- Use SEMRush screenshots (`semrush/<MEDIA_ID>_semrush.png`) and production notes for quantitative cues.
+- Use SEMRush screenshots (`output/<MEDIA_ID>/semrush/<MEDIA_ID>_*`) and production notes for quantitative cues.
 - When external search is unavailable, rely on transcript facts, brand knowledge, and previously ranked keywords in `output/<MEDIA_ID>/`.
 - Differentiate **direct keywords** (explicit mentions) from **implied keywords** (logical themes the audience will search for).
 

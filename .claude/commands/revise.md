@@ -1,63 +1,47 @@
 ---
-description: Generate copy revision document from draft metadata (Phase 2)
+description: Regenerate copy revision with project picker (Phase 2)
 ---
 
 You are executing Phase 2 of the PBS Wisconsin video editorial workflow.
 
 ## Task Overview
 
-Analyze draft metadata (from screenshot or text) and generate a copy revision document with side-by-side comparisons and clear reasoning for edits.
+Help the user choose a project from the 15 most recent Media IDs in `output/`, collect the latest draft artifact, then generate an updated copy revision document.
 
-## Instructions
+## Steps
 
-1. **Read the system prompt** from `system_prompts/phase2_editing.md` to understand all requirements
+1. **List recent projects**
+   - Scan `output/` (exclude `archive/`) sorted by last-modified time.
+   - Present the 15 most recent Media IDs with their phase statuses from `workflow.json` (if present).
+   - Offer `more` to show additional batches of 15 when the user asks.
 
-2. **Identify the Media ID**:
-   - If user provided it, use that
-   - If user provided a draft screenshot path, extract from filename (e.g., "2WLI1203HD" from "2WLI1203HD_draft.png")
-   - Otherwise, ask the user to specify which video they're revising
+2. **Resolve the target Media ID**
+   - Accept a numeric choice from the list, a typed Media ID, or a direct path supplied by the user.
+   - Confirm the resolved Media ID before continuing.
 
-3. **Read the transcript** from `transcripts/[MEDIA_ID]*_ForClaude.txt`
+3. **Collect inputs**
+   - Transcript: `transcripts/<MEDIA_ID>*_ForClaude.txt` (fall back to `transcripts/archive/` if necessary).
+   - Draft artifact: newest file inside `output/<MEDIA_ID>/drafts/` unless the user supplies a path or pastes text.
+   - If no draft exists, ask the user to provide one (image or text) and save it into the project folder before proceeding.
 
-4. **Read the draft copy**:
-   - If user provided a screenshot path, use vision to extract the draft metadata fields
-   - If screenshot is in `draft_copy/`, use that
-   - If user pasted text, use that
-   - Extract: Title, Short Description, Long Description, Keywords (if present)
+4. **Apply program knowledge**
+   - Consult `knowledge/Media ID Prefixes.md` for program-specific rules.
+   - Use `system_prompts/phase2_editing.md` to guide the revision.
 
-5. **Check for program-specific knowledge**:
-   - Read `knowledge/Media ID Prefixes.md` to identify which PBS Wisconsin program this is
-   - Apply any program-specific rules (University Place, Here and Now, The Look Back, etc.)
+5. **Generate the output**
+   - Produce `output/<MEDIA_ID>/02_copy_revision.md` (overwrite if it exists).
+   - Capture side-by-side comparisons, reasoning for each change, AP Style checks, and keyword adjustments.
 
-6. **Generate the copy revision document** following the format in phase2_editing.md
-
-7. **Write the output** to `output/[MEDIA_ID]/02_copy_revision.md`
-
-8. **Inform the user**:
-   - Confirm which Media ID was processed
-   - Summarize the key changes recommended (2-3 main points)
-   - Show the output file path
-   - Ask if they'd like to proceed with Phase 3 (SEO research) or if revisions are complete
-
-## Example Usage
-
-With screenshot:
-```
-/revise draft_copy/2WLI1203HD_draft.png
-```
-
-With explicit Media ID:
-```
-/revise 2WLI1203HD
-```
-(Then paste screenshot or draft text when prompted)
+6. **Report back**
+   - Confirm the processed Media ID and summarize the top recommendations (2–3 bullets).
+   - Provide the output path for reference.
+   - Offer to run Phase 3 (`/research-keywords`) if a SEMRush artifact is available.
 
 ## Quality Checks
 
-Before writing output, verify:
-- ✅ All original copy accurately extracted/recorded
-- ✅ Character counts are exact for both original and revised
-- ✅ Each revision has clear reasoning explained
-- ✅ Program-specific rules applied
-- ✅ No prohibited language in revisions
-- ✅ Metadata header includes Media ID, timestamp, source files
+Before finishing, verify that:
+- ✅ Draft content is accurately extracted from the provided file or user input
+- ✅ Character counts are listed for original and revised metadata
+- ✅ Program-specific rules are explicitly acknowledged
+- ✅ Output file path matches `output/<MEDIA_ID>/02_copy_revision.md`
+- ✅ Workflow log (`workflow.json`) is updated when automation is involved

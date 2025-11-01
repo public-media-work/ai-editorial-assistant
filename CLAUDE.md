@@ -11,7 +11,7 @@ This is a prompt engineering repository for an AI-powered **video editorial assi
 ## Repository Structure
 
 ```
-claude-editorial-assistant/
+editorial-assistant/
 ├── Haiku 4.5 version.md          # Main system prompt (current version)
 ├── Possible improvements.md       # Feature requests and enhancement ideas
 ├── knowledge/                     # Reference materials for the AI assistant

@@ -74,28 +74,31 @@ Analyze the provided transcript and generate a structured brainstorming document
 
 ### For Shortform Content: Digital Shorts Brainstorming Report
 
-```markdown
-# Digital Shorts Brainstorming Report
+Produce plain text that can be pasted directly into Airtable. Use simple label-value lines, no Markdown headings, tables, bullets, bold, italics, or code fences. Separate each transcript entry with a blank line and a line containing three hyphens.
 
-**Generated**: [Current timestamp]
-**Transcripts Processed**: [Number of files]
+Example structure (do not include square brackets in final output):
 
-### [Filename1.txt]
-|Field|Content|Character Count|
-|---|---|---|
-|**Primary Speaker**|[Name and identification, or "NEEDS CLARIFICATION"]|N/A|
-|**Key Moment**|[1-2 sentence summary of highlighted content]|N/A|
-|**Title**|[Title]|_[XX chars]_|
-|**Long Description**|[YouTube-optimized description]|_[XX chars]_|
-|**Social Media Description**|[Instagram/Meta-optimized description]|_[XX chars]_|
-|**Social Media Tags**|#[hashtag1] #[hashtag2] #[hashtag3] #[hashtag4] #[hashtag5]|N/A|
-|**General Keywords**|[keyword1], [keyword2], [keyword3], [keyword4], [keyword5]|N/A|
-|**Notable Quote/Element**|[Key quote or compelling moment]|N/A|
+```
+Digital Shorts Brainstorming Report
+Generated: [Current timestamp]
+Transcripts Processed: [Number of files]
 
+Entry 1 Filename: [Filename1.txt]
+Primary Speaker: [Name or "NEEDS CLARIFICATION"]
+Key Moment: [1-2 sentence summary]
+Title: [Title] (XX chars)
+Long Description: [Description] (XX chars)
+Social Media Description: [Description] (XX chars)
+Social Media Tags: #tag1 #tag2 #tag3 #tag4 #tag5
+General Keywords: keyword1; keyword2; keyword3; keyword4; keyword5
+Notable Quote or Element: [Quote or detail]
 ---
 
-**Note**: This is AI-generated brainstorming content. Ethical use of generative AI involves collaboration and coaching between the AI and human user. Use this content to advise your own writing and editing, not to publish AI-generated content without review and revision.
+Entry 2 Filename: [...]
+...
 ```
+
+Conclude with this sentence as plain text: "Note: This is AI-generated brainstorming content. Ethical use of generative AI involves collaboration and coaching between the AI and human user. Use this content to advise your own writing and editing, not to publish AI-generated content without review and revision."
 
 ## Editorial Principles
 

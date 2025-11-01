@@ -1,120 +1,58 @@
 # Example Output Structure
 
-This folder demonstrates how outputs are organized for each Media ID.
+This folder demonstrates how each Media ID workspace is organized once the automation watcher runs.
 
-## Folder Contents
+## Core Deliverables
 
-When you process a transcript through the PBS Wisconsin editorial workflow, you'll get numbered markdown files corresponding to each phase:
+The watcher produces the following Markdown files automatically when a transcript is dropped into `transcripts/`:
 
-### Core Workflow (Always Generated)
+- `01_brainstorming.md` – Phase 1 titles, descriptions, keyword seed list, notable quotes
+- `05_formatted_transcript.md` – AP Style formatted transcript
+- `06_timestamp_report.md` – Chapter markers for Media Manager and YouTube
 
-- **`01_brainstorming.md`** - Phase 1 output with title options, descriptions, and initial keywords
-- **`02_copy_revision.md`** - Phase 2 output comparing your draft copy to AI recommendations
-- **`03_keyword_report.md`** - Phase 3 output with SEO research and keyword rankings (optional, only when you provide SEMRush data)
-- **`04_implementation.md`** - Phase 3 output with prioritized action items (generated with keyword report)
+Additional phases appear as you supply more assets:
 
-### Optional Outputs (Generated on Request)
+- `02_copy_revision.md` – Created when a file is added to `drafts/`
+- `03_keyword_report.md` + `04_implementation.md` – Created when a SEMRush screenshot appears in `semrush/`
 
-- **`05_formatted_transcript.md`** - AP Style formatted transcript with proper speaker identification
-- **`06_timestamp_report.md`** - Chapter markers for Media Manager and YouTube (15+ minute videos only)
+## Triggering Phases
 
-## Workflow Example
+1. **Transcript**
+   ```bash
+   cp ~/Downloads/2WLI1203HD_ForClaude.txt transcripts/
+   ```
+   Automation creates `output/2WLI1203HD/` with the Phase 1 + Phase 4 files and initializes `workflow.json`.
 
-### Step 1: Add Transcript
-```bash
-cp ~/Downloads/2WLI1203HD_ForClaude.txt transcripts/
-```
+2. **Draft Revision**
+   ```bash
+   cp ~/Screenshots/draft.png output/2WLI1203HD/drafts/20240212_draft.png
+   ```
+   The watcher refreshes `02_copy_revision.md` using the newest draft artifact. `/revise` can also be used to rerun this phase manually.
 
-Then run:
-```
-/brainstorm
-```
+3. **Keyword Research (Optional)**
+   ```bash
+   cp ~/Screenshots/semrush.png output/2WLI1203HD/semrush/20240212_semrush.png
+   ```
+   Automation generates both keyword report files. `/research-keywords` is available for additional passes.
 
-Result: `output/2WLI1203HD/01_brainstorming.md` is created
-
----
-
-### Step 2: Draft Metadata in CMS
-
-- Open `01_brainstorming.md`
-- Use suggestions to create draft in Media Manager
-- Take screenshot of draft
-
----
-
-### Step 3: Add Draft Screenshot
-```bash
-cp ~/Screenshots/draft.png draft_copy/2WLI1203HD_draft.png
-```
-
-Then run:
-```
-/revise 2WLI1203HD
-```
-
-Result: `output/2WLI1203HD/02_copy_revision.md` is created
-
----
-
-### Step 4 (Optional): SEO Research
-
-If you need keyword research:
-
-```bash
-cp ~/Screenshots/semrush.png semrush/2WLI1203HD_semrush.png
-```
-
-Then run:
-```
-/research-keywords 2WLI1203HD
-```
-
-Result: Both `03_keyword_report.md` and `04_implementation.md` are created
-
----
-
-### Step 5 (Optional): Additional Outputs
-
-For formatted transcript:
-```
-/format-transcript 2WLI1203HD
-```
-
-For timestamps (15+ min videos):
-```
-/create-timestamps 2WLI1203HD
-```
-
----
-
-## File Naming Convention
-
-All files use the Media ID as the folder name and numbered files for easy sequencing:
+## Project Layout
 
 ```
 output/
-├── 2WLI1203HD/          # Wisconsin Life episode
-│   ├── 01_brainstorming.md
-│   ├── 02_copy_revision.md
-│   └── ...
-├── 9UNP1972HD/          # University Place episode
-│   ├── 01_brainstorming.md
-│   └── ...
-└── 6HNS/                # Here and Now Digital Short
+└── 2WLI1203HD/
     ├── 01_brainstorming.md
-    └── ...
+    ├── 02_copy_revision.md
+    ├── 03_keyword_report.md
+    ├── 04_implementation.md
+    ├── 05_formatted_transcript.md
+    ├── 06_timestamp_report.md
+    ├── drafts/
+    │   └── 2WLI1203HD_*.png or .md
+    ├── semrush/
+    │   └── 2WLI1203HD_*.png
+    └── workflow.json
 ```
 
-This makes it trivial to find all outputs for a specific video.
+## Archiving
 
-## Archiving Completed Work
-
-When you're done with a video, move inputs to archive folders:
-
-```bash
-mv transcripts/2WLI1203HD_ForClaude.txt transcripts/archive/
-mv draft_copy/2WLI1203HD_draft.png draft_copy/archive/
-mv semrush/2WLI1203HD_semrush.png semrush/archive/
-```
-
-The `output/2WLI1203HD/` folder remains as your permanent record of AI-generated recommendations.
+A cron job running `python3 automation/archive.py --config automation/config.yaml` moves projects and transcripts older than 90 days to the respective `archive/` folders. You can still run it manually with `--dry-run` to preview the actions.

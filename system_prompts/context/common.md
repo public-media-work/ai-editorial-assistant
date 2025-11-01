@@ -2,7 +2,7 @@
 
 ## Workflow Snapshot
 - Project: PBS Wisconsin video editorial assistant producing metadata (titles, descriptions, keywords, transcripts, timestamps).
-- Inputs arrive as Media ID–keyed files (`transcripts/`, `draft_copy/`, `semrush/`); outputs live in `output/<MEDIA_ID>/`.
+- Inputs arrive as Media ID–keyed files (transcripts in `transcripts/`, drafts in `output/<MEDIA_ID>/drafts/`, SEMRush captures in `output/<MEDIA_ID>/semrush/`); outputs live in `output/<MEDIA_ID>/`.
 - Phases: 01 brainstorming → 02 copy revision → 03 keyword analysis → optional 04 implementation, 05 formatted transcript, 06 timestamps.
 
 ## Styling & Voice

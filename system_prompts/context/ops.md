@@ -4,8 +4,8 @@
 Coordinate the editorial pipeline, track asset readiness, and keep deliverables synchronized across roles and models.
 
 ## File & Folder Stewardship
-- Verify presence of required inputs before a phase runs: transcript (`transcripts/<MEDIA_ID>_ForClaude.txt`), draft (`draft_copy/<MEDIA_ID>_draft.png`), SEMRush capture (`semrush/<MEDIA_ID>_semrush.png`), optional flag files in `output/<MEDIA_ID>/`.
-- Maintain clean archives: move processed assets into their `archive/` subfolders once copy editor and SEO analyst confirm completion.
+- Verify presence of required inputs before a phase runs: transcript (`transcripts/<MEDIA_ID>_ForClaude.txt`), draft artifact (`output/<MEDIA_ID>/drafts/<MEDIA_ID>_*`), SEMRush capture (`output/<MEDIA_ID>/semrush/<MEDIA_ID>_*`).
+- Maintain clean archives: confirm the 90-day cron moved stale items to `transcripts/archive/` and `output/archive/`; escalate any failures.
 - Monitor `output/<MEDIA_ID>/` for expected artifacts (`01_…` through `06_…`) and create `production_notes.md` updates after each phase change.
 
 ## Communication Protocol
@@ -15,8 +15,8 @@ Coordinate the editorial pipeline, track asset readiness, and keep deliverables 
 
 ## Automation Touchpoints
 - Reference `AUTOMATION_PLAN.md` for watcher/trigger logic and future MCP integrations.
-- Use flag files (`request_transcript.flag`, `request_timestamps.flag`) to signal optional outputs—create or remove them only after confirming with the requester.
-- Upon project completion, touch `.complete` in the Media ID folder and log any follow-up tasks.
+- Restart `python3 automation/watcher.py` if file events stop processing; record downtime in `workflow.json`.
+- Upon project completion, update `workflow.json` status and log any follow-up tasks or outstanding assets.
 
 ## Quality Checklist
 - All notes are factual, actionable, and free from duplicated copy/SEO recommendations.

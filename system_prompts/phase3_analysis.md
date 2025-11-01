@@ -61,88 +61,63 @@ Generate TWO separate documents:
 
 ### Document 1: Keyword Report
 
-```markdown
-# Keyword Report
+Produce plain text suitable for direct Airtable entry. Do not use Markdown headings, tables, bold, italics, bullet symbols, or code fences in the final response. Use clear label-value lines separated by blank lines, and use simple numbered lists where ranking is required. Example structure (square brackets indicate fields to replace):
 
-**Media ID**: [Extract from filename]
-**Generated**: [Current timestamp]
-**Transcript**: [Path to source file]
-**SEMRush Source**: [Screenshot or data input]
+```
+Keyword Report
+Media ID: [Extract from filename]
+Generated: [Current timestamp]
+Transcript: [Path to source file]
+SEMRush Source: [Screenshot or data input]
 
-## Platform-Ready Keyword List
+Platform-Ready Keyword List:
 [highest-volume-keyword], [keyword2], [keyword3]...[keyword20]
 
-*This comma-separated list is optimized for direct copy-paste into Media Manager or YouTube.*
+Current Market Intelligence - Trending Keywords:
+1) [Keyword and short explanation]
+2) [...]
 
----
+Current Market Intelligence - Competitive Gaps:
+1) [Keyword and opportunity explanation]
+2) [...]
 
-## Current Market Intelligence
+Current Market Intelligence - Seasonal Factors:
+1) [Factor and timing insight]
+2) [...]
 
-### Trending Keywords
-[Keywords currently gaining search momentum, with brief explanation of why they're trending]
+Distinctive Keywords:
+1) [Keyword] - Volume [XXX/month] - Difficulty [Easy/Moderate/Hard] - [Competitive advantage]
+2) [...]
 
-### Competitive Gaps
-[High-opportunity keywords competitors aren't leveraging, with explanation of the opportunity]
+Ranked Keywords by Search Volume - High Volume (1000+ monthly searches):
+1) [Keyword] - Volume [XXX] - Difficulty [Easy/Moderate/Hard] - [Brief relevance note]
+2) [...]
 
-### Seasonal Factors
-[Time-sensitive optimization opportunities, if applicable]
+Ranked Keywords by Search Volume - Medium Volume (100-999 monthly searches):
+1) [Keyword] - Volume [XXX] - Difficulty [Easy/Moderate/Hard] - [Brief relevance note]
 
----
+Ranked Keywords by Search Volume - Low Volume (under 100 monthly searches but valuable):
+1) [Keyword] - Volume [XXX] - Difficulty [Easy/Moderate/Hard] - [Why it's valuable]
 
-## Distinctive Keywords
-
-**Unique Value Terms**: Lower volume but high relevance with less competition
-
-- **[keyword]** - _Volume: XXX/month_ - _Difficulty: Easy_ - [Competitive advantage explanation]
-- **[keyword]** - _Volume: XXX/month_ - _Difficulty: Easy_ - [Competitive advantage explanation]
-- **[keyword]** - _Volume: XXX/month_ - _Difficulty: Moderate_ - [Competitive advantage explanation]
-
----
-
-## Ranked Keywords by Search Volume
-
-### High Volume (1,000+ monthly searches)
-1. **[Keyword]** - _Volume: XXX_ - _Difficulty: Easy/Moderate/Hard_ - [Brief relevance note]
-2. **[Keyword]** - _Volume: XXX_ - _Difficulty: Easy/Moderate/Hard_ - [Brief relevance note]
-
-### Medium Volume (100-999 monthly searches)
-1. **[Keyword]** - _Volume: XXX_ - _Difficulty: Easy/Moderate/Hard_ - [Brief relevance note]
-2. **[Keyword]** - _Volume: XXX_ - _Difficulty: Easy/Moderate/Hard_ - [Brief relevance note]
-
-### Low Volume (<100 monthly searches, but strategically valuable)
-1. **[Keyword]** - _Volume: XXX_ - _Difficulty: Easy/Moderate/Hard_ - [Why it's valuable despite low volume]
-2. **[Keyword]** - _Volume: XXX_ - _Difficulty: Easy/Moderate/Hard_ - [Why it's valuable despite low volume]
-
----
-
-## Keywords by User Intent
-
-### Informational (Users seeking to learn)
+Keywords by User Intent - Informational:
 [keyword1], [keyword2], [keyword3]
 
-### Navigational (Users looking for specific content/brand)
+Keywords by User Intent - Navigational:
 [keyword1], [keyword2], [keyword3]
 
-### Transactional (Users ready to take action - less common for PBS content)
+Keywords by User Intent - Transactional:
 [keyword1], [keyword2] (if applicable)
 
----
+Comparison with Original Keywords:
+Original Keywords: [List or "Not provided"]
+Keep: [Keywords to keep]
+Add: [Keywords to add]
+Remove: [Keywords to drop]
 
-## Comparison with Original Keywords
-
-**Original keywords**: [List from brainstorming or draft copy, if available]
-
-**Changes recommended**:
-- ✅ **Keep**: [Keywords that performed well in research]
-- ➕ **Add**: [New keywords discovered through research]
-- ❌ **Remove**: [Keywords with low relevance or opportunity]
-
----
-
-## Research Sources
-- SEMRush data provided: [Summary of what was in the data]
-- Web search findings: [Key sources or trends discovered]
-- Competitor analysis: [Any competitor content analyzed]
+Research Sources:
+SEMRush Data: [Summary]
+Web Search Findings: [Key sources or trends]
+Competitor Analysis: [Any competitor content analyzed]
 ```
 
 ### Document 2: Implementation Report

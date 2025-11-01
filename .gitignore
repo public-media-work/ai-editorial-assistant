@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+*.egg-info/
+dist/
+build/
+
+# Project-specific: Exclude transcript and output contents
+# Keep the folders but ignore their contents
+transcripts/*
+!transcripts/.gitkeep
+!transcripts/archive/
+transcripts/archive/*
+!transcripts/archive/.gitkeep
+
+output/*
+!output/.gitkeep
+!output/EXAMPLE_2WLI1203HD/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
