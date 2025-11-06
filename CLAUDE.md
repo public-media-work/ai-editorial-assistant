@@ -191,3 +191,12 @@ This repository is currently designed for chat-based interaction with Claude. Fo
 - Currently designed for chat-based interaction (Claude.ai desktop app)
 - The primary artifact is the system prompt in Markdown format
 - Knowledge base files (PDFs, PNGs) are reference materials only
+
+## Git Commit Convention
+
+**IMPORTANT**: This project follows workspace-wide commit conventions.
+
+**See**: `/Users/mriechers/Developer/workspace_ops/conventions/COMMIT_CONVENTIONS.md`
+
+# Add Co-Authors section to README.md
+# (See template in COMMIT_CONVENTIONS.md

@@ -343,5 +343,18 @@ For issues or questions:
 
 ---
 
+## Co-Authors
+
+This project is developed collaboratively with AI assistance. Commit attribution follows the workspace conventions in `/Users/mriechers/Developer/workspace_ops/conventions/COMMIT_CONVENTIONS.md`.
+
+| Agent | Role | Recent Commits |
+|-------|------|----------------|
+| Main Assistant | Prompt iteration and automation | `git log --grep="Agent: Main Assistant"` |
+| code-reviewer | Code review and QA | `git log --grep="Agent: code-reviewer"` |
+
+Run `git log --grep="Agent:" --oneline` to view the full agent history for this repository. See the workspace conventions document for more query examples.
+
+---
+
 **Version**: File-based workflow for Claude Code
 **Last Updated**: 2025-10-22

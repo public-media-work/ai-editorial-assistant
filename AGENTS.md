@@ -1,5 +1,11 @@
 # Agent Roster
 
+## Git Commit Convention
+
+**IMPORTANT**: This project follows workspace-wide commit conventions.
+
+**See**: `/Users/mriechers/Developer/workspace_ops/conventions/COMMIT_CONVENTIONS.md`
+
 ## Purpose
 Keep the editorial assistant aligned on who does what, which tools they own, and where to look for shared context.
 We now operate with four lightweight roles that cover orchestration, implementation, review, and comms.
