@@ -1,0 +1,11 @@
+#!/bin/bash
+# Delegate to shared workspace validator
+WORKSPACE_HOOK="/Users/mriechers/Developer/workspace_ops/conventions/git-hooks/commit-msg"
+
+if [ -f "${WORKSPACE_HOOK}" ]; then
+  exec "${WORKSPACE_HOOK}" "$@"
+else
+  # Fallback: allow commit but warn
+  echo "Warning: Workspace git hook not found" >&2
+  exit 0
+fi
