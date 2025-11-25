@@ -1,0 +1,88 @@
+# Cross-LLM Agent Coordination Plan
+
+This document proposes a coordination system that lets the CLI call out to multiple large-language-model agents (e.g., Claude, GPT, Gemini) while keeping context synchronized and hand-offs predictable.
+
+## Objectives
+- Preserve the ADHD-friendly CLI as the sole user touchpoint while allowing specialized agents to collaborate behind the scenes.
+- Share transcripts, outputs, and validation notes across agents without leaking sensitive data.
+- Keep a durable project memory so any agent (or human) can resume a task mid-stream.
+- Support vendor diversity: if one LLM endpoint is unavailable, swap in another without breaking the workflow.
+
+## Coordination Layers
+
+### 1. Shared Project Memory
+- Location: `<project>/.memory/`
+- Files:
+  - `state.json` – canonical project status (phase, deliverables, timestamps)
+  - `timeline.md` – human-readable event log
+  - `knowledge/` – agent-curated snippets, decisions, follow-ups
+  - `handoffs/phase-<n>-summary.md` – structured summaries each agent writes for the next one
+- Every agent must read `state.json` before acting and append to `timeline.md` when done.
+
+### 2. Task Contracts
+- Each CLI command maps to a `task.yaml` stored under `.memory/tasks/`.
+- Contract fields:
+  - `id`, `phase`, `objective`, `inputs`, `required_outputs`
+  - `agent_role` (e.g., `brainstormer`, `reviser`, `analyzer`)
+  - `handoff_to` (next agent role or `human`)
+- Agents receive the contract alongside primary inputs, guaranteeing consistent expectations.
+
+### 3. Message Bus (Filesystem-Based)
+- The CLI owns a lightweight message bus implemented as JSONL files:
+  - `.memory/bus/inbox/<agent_role>.jsonl`
+  - `.memory/bus/outbox/<agent_role>.jsonl`
+- Each message entry includes:
+  ```json
+  {
+    "timestamp": "...",
+    "task_id": "...",
+    "from": "cli|agent_role",
+    "to": "agent_role|cli",
+    "payload_type": "instruction|result|question|alert",
+    "payload": {...}
+  }
+  ```
+- Agents poll their inbox before work; when complete, they push a `result` payload to the outbox.
+
+### 4. Normalized Prompts
+- Place reusable prompt fragments in `prompts/<agent_role>/`.
+- Each prompt references:
+  - `{{task.objective}}`
+  - `{{inputs.primary}}`
+  - `{{handoff.summary}}`
+  - `{{memory.timeline_recent}}`
+- This keeps vendor-specific prompt tuning isolated while the data contract stays constant.
+
+## Flow Example (Phase 1 Brainstorming)
+1. CLI creates `task.yaml` (`phase=1`, `agent_role=brainstormer`) and writes transcript to project memory.
+2. CLI drops instruction message in `bus/inbox/brainstormer.jsonl`.
+3. Claude-based `brainstormer` reads memory + contract, generates output, saves markdown deliverable.
+4. Agent appends a `handoffs/phase-1-summary.md` file and posts a `result` message in its outbox.
+5. CLI consumes the result, updates `state.json`, and triggers next contract (e.g., `reviser` via GPT).
+
+## Vendor Abstraction
+- Implement per-vendor adapters exposing a common interface:
+  ```python
+  class AgentAdapter(Protocol):
+      def run(self, task: Task, memory: ProjectMemory) -> AgentResult:
+          ...
+  ```
+- Adapters live in `adapters/<vendor>/<agent_role>.py`.
+- Fallback strategy: configure priority lists (`brainstormer`: `[claude, gpt, gemini]`); on failure, retry with the next adapter.
+
+## Security & Privacy
+- Keep transcripts and outputs inside the project directory; only send minimal necessary excerpts to external APIs.
+- Mask personally identifiable info before serialization if policy requires it.
+- Store API keys via environment variables; adapters read from `config/agents.yaml` for endpoint metadata.
+
+## Implementation Roadmap
+1. **Scaffold project memory**: generate `.memory/` structure on project creation.
+2. **Implement task contracts**: define schema, CLI writing logic, validation.
+3. **Build filesystem bus**: helper functions for enqueue/dequeue with locking.
+4. **Create adapter interface**: wire in the current Claude agent as the first implementation.
+5. **Add handoff summaries**: standard template for the markdown summary each agent writes.
+6. **Introduce second vendor**: add GPT adapter, test failover, iterate on prompt parity.
+7. **Monitoring**: CLI `status` command reads `timeline.md` and shows outstanding tasks/messages.
+
+This plan keeps coordination explicit and inspectable, making it easier for humans—and agents from different LLM vendors—to collaborate on the same editorial projects.
+

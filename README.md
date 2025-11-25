@@ -141,3 +141,22 @@ For feature requests or improvements, see `Possible improvements.md`.
 ---
 
 **Remember**: This tool generates starting points and suggestions. All AI-generated content must be reviewed and edited by humans before publication.
+
+## Co-Authors
+
+This repository is developed collaboratively with AI assistance. Contributors are tracked via git commits:
+
+| Agent | Role | Recent Commits |
+|-------|------|----------------|
+| **Main Assistant** | Primary development, bug fixes, documentation | `git log --grep="Agent: Main Assistant"` |
+
+To see agent-specific contributions:
+```bash
+# View all commits by agent
+git log --grep="Agent: Main Assistant"
+
+# View agent distribution
+git log --oneline | grep -o '\[Agent: [^]]*\]' | sort | uniq -c
+```
+
+See [workspace conventions](../workspace_ops/conventions/COMMIT_CONVENTIONS.md) for details.

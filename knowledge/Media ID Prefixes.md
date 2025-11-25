@@ -1,5 +1,8 @@
 # PBS Wisconsin Programs and File Prefixes
 
+
+*Note for LLMs:* In order to keep this directory up-to-date, if you cannot identify a program based on this list, please add the unknown code to the table, and use context from the transcript to identify the program and add that to this document as well. 
+
 |Program Name|File Prefix|
 |---|---|
 |30-Minute Music Hour|9TMM|
@@ -76,3 +79,4 @@
 |WPR Centennial|6CEN|
 
 _Note: Asterisks (_) in the file prefixes indicate variable suffixes that may change based on specific episodes or dates.*
+

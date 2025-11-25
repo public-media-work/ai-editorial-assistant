@@ -1,0 +1,28 @@
+{
+  "name": "editorial-assistant-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for editorial assistant - bridges Claude Code batch processing with Claude Chat interactive editing",
+  "type": "module",
+  "bin": {
+    "editorial-assistant-mcp": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node build/index.js",
+    "dev": "tsc && node build/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "editorial",
+    "video-metadata",
+    "pbs-wisconsin"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
