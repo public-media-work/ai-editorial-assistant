@@ -98,8 +98,8 @@ def load_transcript(project_name: str) -> str:
                 return f_latin1.read()
 
 
-def update_manifest(project_name: str, deliverable_type: str, filename: str, agent: str):
-    """Update project manifest with new deliverable"""
+def update_manifest(project_name: str, deliverable_type: str, filename: str, agent: str, metrics: dict | None = None):
+    """Update project manifest with new deliverable and optional metrics"""
     manifest_path = OUTPUT_DIR / project_name / "manifest.json"
 
     if not manifest_path.exists():
@@ -114,11 +114,17 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
         if "deliverables" not in manifest:
             manifest["deliverables"] = {}
 
-        manifest["deliverables"][deliverable_type] = {
+        deliverable_entry = {
             "file": filename,
             "created": datetime.utcnow().isoformat() + "Z",
             "agent": agent
         }
+
+        # Add metrics if provided
+        if metrics:
+            deliverable_entry["metrics"] = metrics
+
+        manifest["deliverables"][deliverable_type] = deliverable_entry
 
         # Update status
         has_brainstorming = "brainstorming" in manifest.get("deliverables", {})
@@ -127,6 +133,19 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
         if has_brainstorming and has_formatted:
             manifest["status"] = "ready_for_editing"
             manifest["processing_completed"] = datetime.utcnow().isoformat() + "Z"
+
+            # Calculate total project cost
+            total_cost = 0.0
+            total_tokens = 0
+            for deliverable in manifest["deliverables"].values():
+                if "metrics" in deliverable:
+                    total_cost += deliverable["metrics"].get("estimated_cost", 0.0)
+                    total_tokens += deliverable["metrics"].get("total_tokens", 0)
+
+            manifest["processing_metrics"] = {
+                "total_estimated_cost": round(total_cost, 4),
+                "total_tokens": total_tokens
+            }
 
         # Save manifest
         with open(manifest_path, "w") as f:
@@ -191,24 +210,32 @@ def get_backend_sequence(agent_key: str, llm: LLMBackend) -> list[str | None]:
     return [primary] if primary else [None]
 
 
-def run_with_fallback(agent_key: str, prompt: str, system: str, llm: LLMBackend) -> tuple[str, str]:
-    """Try multiple backends in order; auto-upgrade on failure"""
+def run_with_fallback(agent_key: str, prompt: str, system: str, llm: LLMBackend):
+    """Try multiple backends in order; auto-upgrade on failure
+
+    Returns:
+        tuple: (response, backend_used, usage_metrics)
+    """
     errors = []
     for backend_name in get_backend_sequence(agent_key, llm):
         try:
             if backend_name and not llm.is_available(backend_name):
                 errors.append(f"{backend_name}: unavailable")
                 continue
-            response, used_backend = llm.generate(prompt, system, backend_name)
-            return response, used_backend
+            response, used_backend, metrics = llm.generate(prompt, system, backend_name)
+            return response, used_backend, metrics
         except Exception as e:
             errors.append(f"{backend_name or 'auto'}: {e}")
             continue
     raise Exception(f"All backends failed for {agent_key}: {' | '.join(errors)}")
 
 
-def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, verbose: bool = True) -> str:
-    """Run transcript-analyst and save brainstorming"""
+def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, verbose: bool = True) -> tuple[str, dict]:
+    """Run transcript-analyst and save brainstorming
+
+    Returns:
+        tuple: (filename, metrics_dict)
+    """
     if verbose:
         print("\n→ Running transcript-analyst agent...")
     log_event(project_name, "transcript-analyst", "started")
@@ -217,7 +244,7 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, verbo
     analyst_system = "You are a professional video content analyst generating SEO metadata for PBS Wisconsin video content. Follow the template and guidelines exactly."
     analyst_user = f"{analyst_prompt_template}\n\n# TRANSCRIPT TO ANALYZE\n\n{transcript}"
 
-    brainstorming, backend_used = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    brainstorming, backend_used, metrics = run_with_fallback("analyst", analyst_user, analyst_system, llm)
 
     output_dir = OUTPUT_DIR / project_name
     brainstorming_path = output_dir / "brainstorming.md"
@@ -226,13 +253,27 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, verbo
 
     if verbose:
         print(f"  ✓ Saved: brainstorming.md ({len(brainstorming)} chars) via {backend_used}")
+        print(f"  ✓ Cost: ${metrics.estimated_cost:.4f} ({metrics.total_tokens} tokens)")
 
-    log_event(project_name, "transcript-analyst", "completed", {"backend": backend_used})
-    return "brainstorming.md"
+    metrics_dict = {
+        "input_tokens": metrics.input_tokens,
+        "output_tokens": metrics.output_tokens,
+        "total_tokens": metrics.total_tokens,
+        "estimated_cost": metrics.estimated_cost,
+        "model": metrics.model,
+        "backend": backend_used
+    }
+
+    log_event(project_name, "transcript-analyst", "completed", {"backend": backend_used, "metrics": metrics_dict})
+    return "brainstorming.md", metrics_dict
 
 
-def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, verbose: bool = True) -> tuple[str, str | None]:
-    """Run formatter and save formatted transcript (+ timestamps if present)"""
+def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, verbose: bool = True) -> tuple[str, str | None, dict]:
+    """Run formatter and save formatted transcript (+ timestamps if present)
+
+    Returns:
+        tuple: (formatted_filename, timestamp_filename, metrics_dict)
+    """
     if verbose:
         print("\n→ Running formatter agent...")
     log_event(project_name, "formatter", "started")
@@ -241,7 +282,7 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
     formatter_system = "You are a professional transcript formatter applying AP Style guidelines for PBS Wisconsin content."
     formatter_user = f"{formatter_prompt_template}\n\n# TRANSCRIPT TO FORMAT\n\n{transcript}"
 
-    formatter_output, backend_used = run_with_fallback("formatter", formatter_user, formatter_system, llm)
+    formatter_output, backend_used, metrics = run_with_fallback("formatter", formatter_user, formatter_system, llm)
     formatted_transcript, timestamp_report = extract_formatted_transcript_and_timestamps(formatter_output)
 
     output_dir = OUTPUT_DIR / project_name
@@ -251,6 +292,7 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
 
     if verbose:
         print(f"  ✓ Saved: formatted_transcript.md ({len(formatted_transcript)} chars) via {backend_used}")
+        print(f"  ✓ Cost: ${metrics.estimated_cost:.4f} ({metrics.total_tokens} tokens)")
 
     timestamp_filename = None
     if timestamp_report:
@@ -261,13 +303,22 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
         if verbose:
             print(f"  ✓ Saved: timestamp_report.md ({len(timestamp_report)} chars)")
 
+    metrics_dict = {
+        "input_tokens": metrics.input_tokens,
+        "output_tokens": metrics.output_tokens,
+        "total_tokens": metrics.total_tokens,
+        "estimated_cost": metrics.estimated_cost,
+        "model": metrics.model,
+        "backend": backend_used
+    }
+
     log_event(
         project_name,
         "formatter",
         "completed",
-        {"backend": backend_used, "timestamps_created": bool(timestamp_filename)}
+        {"backend": backend_used, "timestamps_created": bool(timestamp_filename), "metrics": metrics_dict}
     )
-    return "formatted_transcript.md", timestamp_filename
+    return "formatted_transcript.md", timestamp_filename, metrics_dict
 
 
 def process_project(project_name: str, llm: LLMBackend, verbose: bool = True):
@@ -292,18 +343,26 @@ def process_project(project_name: str, llm: LLMBackend, verbose: bool = True):
         analyst_future = executor.submit(run_analyst_agent, project_name, transcript, llm, verbose)
         formatter_future = executor.submit(run_formatter_agent, project_name, transcript, llm, verbose)
 
-        brainstorming_filename = analyst_future.result()
-        formatted_filename, timestamp_filename = formatter_future.result()
+        brainstorming_filename, analyst_metrics = analyst_future.result()
+        formatted_filename, timestamp_filename, formatter_metrics = formatter_future.result()
 
     # Update manifest after both complete to avoid write races
-    update_manifest(project_name, "brainstorming", brainstorming_filename, "transcript-analyst")
-    update_manifest(project_name, "formatted_transcript", formatted_filename, "formatter")
+    update_manifest(project_name, "brainstorming", brainstorming_filename, "transcript-analyst", analyst_metrics)
+    update_manifest(project_name, "formatted_transcript", formatted_filename, "formatter", formatter_metrics)
     if timestamp_filename:
         update_manifest(project_name, "timestamps", timestamp_filename, "formatter")
 
+    # Calculate and display total cost
+    total_cost = analyst_metrics["estimated_cost"] + formatter_metrics["estimated_cost"]
+    total_tokens = analyst_metrics["total_tokens"] + formatter_metrics["total_tokens"]
+
     if verbose:
-        print(f"\n✓ {project_name} processing complete!")
-    log_event(project_name, "project", "completed")
+        print(f"\n{'='*60}")
+        print(f"✓ {project_name} processing complete!")
+        print(f"  Total cost: ${total_cost:.4f}")
+        print(f"  Total tokens: {total_tokens}")
+        print(f"{'='*60}")
+    log_event(project_name, "project", "completed", {"total_cost": total_cost, "total_tokens": total_tokens})
 
     return True
 
