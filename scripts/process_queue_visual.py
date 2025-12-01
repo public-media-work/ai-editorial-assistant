@@ -600,7 +600,7 @@ def generate_layout():
     layout["right"].update(make_queue_table())
 
     # Add statistics panel if there's enough space
-    if term_height >= 30 and "statistics" in layout:
+    if term_height >= 30:
         layout["statistics"].update(make_stats_panel(state, state.session_manager))
 
     layout["footer"].update(make_controls_panel())
