@@ -68,6 +68,10 @@ class DashboardState:
         self.queue_data = []
         self.lock = Lock()
         self.session_manager = session_manager
+        self.paused: bool = False
+        self.pause_reason: str | None = None
+        self.current_progress: int = 0  # 0-100
+        self.progress_message: str = ""
 
     def set_active(self, project, step, backend=None):
         with self.lock:
@@ -105,6 +109,22 @@ class DashboardState:
     def update_queue(self, queue):
         with self.lock:
             self.queue_data = queue
+
+    def toggle_pause(self, reason: str = "User requested"):
+        """Toggle pause state."""
+        with self.lock:
+            self.paused = not self.paused
+            self.pause_reason = reason if self.paused else None
+            if self.paused:
+                self.log(f"⏸ Paused: {reason}")
+            else:
+                self.log("▶ Resumed")
+
+    def set_progress(self, percent: int, message: str = ""):
+        """Update progress for current operation."""
+        with self.lock:
+            self.current_progress = max(0, min(100, percent))
+            self.progress_message = message
 
 # Global state will be initialized in main() after SessionManager is created
 state = None
@@ -370,13 +390,20 @@ def run_with_fallback(agent_key: str, prompt: str, system: str, llm: LLMBackend)
     raise Exception(f"All backends failed: {' | '.join(errors)}")
 
 def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend) -> str:
+    state.set_progress(0, "Starting analyst agent...")
+    state.set_active(project_name, "Running analyst agent...", "transcript-analyst")
+
+    state.set_progress(20, "Loading agent prompt...")
     log_event(project_name, "transcript-analyst", "started")
     analyst_prompt_template = load_agent_prompt("transcript-analyst")
     analyst_system = "You are a professional video content analyst. Generate the brainstorming document in Markdown format exactly as specified. Do NOT output JSON. Do NOT wrap output in code blocks."
     analyst_user = f"{analyst_prompt_template}\n\n# TRANSCRIPT TO ANALYZE\n\n{transcript}"
-    
+
+    state.set_progress(80, "Processing LLM response...")
     brainstorming, backend_used, cost = run_with_fallback("analyst", analyst_user, analyst_system, llm)
     state.add_cost(cost)
+
+    state.set_progress(100, "Analyst complete")
     
     output_dir = OUTPUT_DIR / project_name
     with open(output_dir / "brainstorming.md", "w") as f:
@@ -387,13 +414,20 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend) -> st
     return "brainstorming.md"
 
 def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend) -> tuple[str, str | None]:
+    state.set_progress(0, "Starting formatter agent...")
+    state.set_active(project_name, "Running formatter agent...", "formatter")
+
+    state.set_progress(20, "Loading formatter prompt...")
     log_event(project_name, "formatter", "started")
     formatter_prompt_template = load_agent_prompt("formatter")
     formatter_system = "You are a professional transcript formatter applying AP Style guidelines. Output raw Markdown only. Do NOT use code blocks (```). Do NOT add conversational text."
     formatter_user = f"{formatter_prompt_template}\n\n# TRANSCRIPT TO FORMAT\n\n{transcript}"
-    
+
+    state.set_progress(80, "Processing LLM response...")
     formatter_output, backend_used, cost = run_with_fallback("formatter", formatter_user, formatter_system, llm)
     state.add_cost(cost)
+
+    state.set_progress(100, "Formatter complete")
     formatted_transcript, timestamp_report = extract_formatted_transcript_and_timestamps(formatter_output)
     
     output_dir = OUTPUT_DIR / project_name
@@ -409,6 +443,49 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend) -> 
     state.log(f"✓ Formatter complete ({len(formatted_transcript)} chars)")
     log_event(project_name, "formatter", "completed", {"backend": backend_used, "timestamps_created": bool(timestamp_filename)})
     return "formatted_transcript.md", timestamp_filename
+
+def skip_current_project(project_name: str):
+    """Move project to end of queue."""
+    with QUEUE_LOCK:
+        queue = load_queue()
+        # Find the project
+        project_idx = None
+        for i, item in enumerate(queue):
+            if item['project'] == project_name:
+                project_idx = i
+                break
+
+        if project_idx is not None:
+            # Move to end
+            project = queue.pop(project_idx)
+            queue.append(project)
+            save_queue(queue)
+            state.log(f"⏭ Skipped {project_name}")
+
+def retry_failed_projects():
+    """Reset all failed projects to pending."""
+    with QUEUE_LOCK:
+        queue = load_queue()
+        count = 0
+        for item in queue:
+            if item.get('status') == 'failed':
+                update_queue_item(item['project'], {
+                    'status': 'pending',
+                    'error': None,
+                    'started_at': None,
+                    'completed_at': None
+                })
+                count += 1
+        if count > 0:
+            state.log(f"🔄 Reset {count} failed project(s)")
+
+def remove_project(project_name: str):
+    """Remove project from queue entirely."""
+    with QUEUE_LOCK:
+        queue = load_queue()
+        queue = [item for item in queue if item['project'] != project_name]
+        save_queue(queue)
+        state.log(f"🗑 Removed {project_name}")
 
 def process_project(project_name: str, llm: LLMBackend):
     state.set_active(project_name, "Loading transcript...")
@@ -464,15 +541,21 @@ def make_header():
     return Panel(title, style="magenta")
 
 def make_controls_panel():
-    """New panel showing available keyboard commands"""
+    """Panel showing available keyboard commands"""
     text = Text()
     text.append("Commands: ", style="dim")
     text.append("[N]", style="bold yellow")
-    text.append(" Check New  ", style="white")
+    text.append(" New  ", style="white")
     text.append("[C]", style="bold yellow")
-    text.append(" Clear Completed  ", style="white")
+    text.append(" Clear  ", style="white")
+    text.append("[P]", style="bold yellow")
+    text.append(" Pause  ", style="white")
+    text.append("[S]", style="bold yellow")
+    text.append(" Skip  ", style="white")
+    text.append("[R]", style="bold yellow")
+    text.append(" Retry  ", style="white")
     text.append("[D]", style="bold cyan")
-    text.append(" Restart Dashboard  ", style="white")
+    text.append(" Restart  ", style="white")
     text.append("[Q]", style="bold red")
     text.append(" Quit", style="white")
 
@@ -482,7 +565,7 @@ def make_active_panel():
     table = Table(box=None, expand=True, show_header=False)
     table.add_column("Label", style="cyan bold", width=12)
     table.add_column("Value", style="white")
-    
+
     program = get_program_name(state.active_project) if state.active_project != "IDLE" else "-"
 
     table.add_row("PROJECT", state.active_project)
@@ -491,13 +574,35 @@ def make_active_panel():
     table.add_row("BACKEND", Text(state.backend_in_use, style="green"))
     table.add_row("VIDEO LEN", state.current_video_length)
     table.add_row("JOB COST", f"${state.current_job_cost:.4f}")
-    
+
+    # Add progress bar if progress > 0
+    if state.current_progress > 0:
+        # Create progress bar
+        bar_width = 20
+        filled = int((state.current_progress / 100) * bar_width)
+        bar = "█" * filled + "░" * (bar_width - filled)
+        progress_text = Text()
+        progress_text.append(bar, style="cyan")
+        progress_text.append(f" {state.current_progress}%", style="white")
+        table.add_row("PROGRESS", progress_text)
+
+        if state.progress_message:
+            table.add_row("", Text(state.progress_message, style="dim"))
+
     log_text = "\n".join(state.logs)
-    
+
+    # Determine title and border style based on pause state
+    if state.paused:
+        panel_title = "[bold yellow]⏸ PAUSED[/]"
+        panel_border = "yellow"
+    else:
+        panel_title = "[bold cyan]ACTIVE PROCESSING[/]"
+        panel_border = "cyan"
+
     return Panel(
-        table, 
-        title="[bold cyan]ACTIVE PROCESSING[/]", 
-        border_style="cyan",
+        table,
+        title=panel_title,
+        border_style=panel_border,
         subtitle=f"[dim]{log_text.splitlines()[0] if log_text else ''}[/]")
 
 def make_queue_table():
@@ -572,20 +677,33 @@ def generate_layout():
     layout = Layout()
 
     # Adjust layout based on terminal height
-    if term_height >= 30:
-        # Full layout with statistics panel
+    if term_height >= 35:
+        # Full layout with statistics and error panels
         layout.split(
             Layout(name="header", size=3),
             Layout(name="main", ratio=1),
             Layout(name="statistics", size=12),  # Stats panel gets fixed height
-            Layout(name="footer", size=3)
+            Layout(name="footer", size=8)  # Increased for errors + controls
         )
-    else:
-        # Compact layout without statistics panel (small terminal)
+        # Split footer into errors and controls
+        layout["footer"].split(
+            Layout(name="errors", size=5),
+            Layout(name="controls", size=3)
+        )
+    elif term_height >= 30:
+        # Medium layout with statistics only
         layout.split(
             Layout(name="header", size=3),
             Layout(name="main", ratio=1),
-            Layout(name="footer", size=3)
+            Layout(name="statistics", size=12),
+            Layout(name="controls", size=3)
+        )
+    else:
+        # Compact layout (minimal)
+        layout.split(
+            Layout(name="header", size=3),
+            Layout(name="main", ratio=1),
+            Layout(name="controls", size=3)
         )
 
     # Split main area into left and right
@@ -603,7 +721,13 @@ def generate_layout():
     if term_height >= 30:
         layout["statistics"].update(make_stats_panel(state, state.session_manager))
 
-    layout["footer"].update(make_controls_panel())
+    # Add error panel if there's enough space
+    if term_height >= 35:
+        from dashboard.ui_components import make_error_panel
+        layout["errors"].update(make_error_panel(state.session_manager))
+        layout["controls"].update(make_controls_panel())
+    else:
+        layout["controls"].update(make_controls_panel())
 
     return layout
 
@@ -748,6 +872,18 @@ def main():
                         clear_completed_projects()
                     elif c == 'n':
                         check_for_new_projects()
+                    elif c == 'p':
+                        # Pause/Resume
+                        state.toggle_pause()
+                        live.update(generate_layout())
+                    elif c == 's':
+                        # Skip current project
+                        if state.active_project != "IDLE" and state.active_project != "PAUSED":
+                            skip_current_project(state.active_project)
+                            state.log(f"⏭ Skipped {state.active_project}")
+                    elif c == 'r':
+                        # Retry failed projects
+                        retry_failed_projects()
                     elif c == 'd':
                         # Restart dashboard with confirmation
                         # Temporarily restore terminal settings for confirmation
@@ -767,10 +903,17 @@ def main():
                 # Re-load queue to capture any changes (external or internal)
                 queue = load_queue()
                 state.update_queue(queue)
-                
+
+                # Check if paused
+                if state.paused:
+                    state.set_active("PAUSED", f"⏸ {state.pause_reason}", "standby")
+                    live.update(generate_layout())
+                    time.sleep(0.1)
+                    continue
+
                 # Check for pending items
                 pending_items = [i for i in queue if i.get("status") == "pending"]
-                
+
                 if not pending_items:
                     state.set_active("IDLE", "Waiting for new projects...", "standby")
                     live.update(generate_layout())
@@ -780,7 +923,7 @@ def main():
                 # Process pending items
                 # IMPORTANT: We only grab ONE item, process it, then loop back
                 # This ensures we check for input/interrupts between items
-                
+
                 item = pending_items[0]
                 project_name = item["project"]
                 

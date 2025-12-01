@@ -197,13 +197,59 @@ def make_error_panel(session: "SessionManager") -> "Panel":
     """
     Create a panel displaying recent errors.
 
+    Shows the last 3 errors from the session with timestamp,
+    project name, and truncated error message.
+
     Args:
         session: SessionManager instance
 
     Returns:
-        Rich Panel with recent errors
+        Rich Panel with recent errors, or empty state message
     """
-    pass
+    stats = session.get_stats()
+    errors = stats.get("errors", [])
+
+    # Get last 3 errors
+    recent_errors = errors[-3:] if errors else []
+
+    if not recent_errors:
+        return Panel(
+            Text("No errors yet", style="dim"),
+            title="[bold red]RECENT ERRORS[/]",
+            border_style="red",
+            box=box.SIMPLE
+        )
+
+    table = Table(box=None, expand=True, show_header=False, padding=(0, 1))
+    table.add_column("Error", style="white")
+
+    for error_record in reversed(recent_errors):  # Show newest first
+        timestamp = error_record.get("timestamp", "")
+        # Extract just time from ISO timestamp
+        time_str = timestamp[11:19] if len(timestamp) >= 19 else timestamp
+
+        project = error_record.get("project", "Unknown")
+        error_msg = error_record.get("error", "No details")
+        backend = error_record.get("backend", "unknown")
+
+        # Truncate error message to 60 chars
+        if len(error_msg) > 60:
+            error_msg = error_msg[:57] + "..."
+
+        error_text = Text()
+        error_text.append(f"{time_str} ", style="dim")
+        error_text.append(f"[{backend}] ", style="yellow")
+        error_text.append(f"{project}: ", style="cyan")
+        error_text.append(error_msg, style="red")
+
+        table.add_row(error_text)
+
+    return Panel(
+        table,
+        title="[bold red]RECENT ERRORS[/]",
+        border_style="red",
+        box=box.SIMPLE
+    )
 
 
 def make_progress_bar(
