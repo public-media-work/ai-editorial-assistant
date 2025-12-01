@@ -58,66 +58,22 @@ Transform video transcripts into compelling, discoverable metadata through syste
 
 ### Outputs Guaranteed
 
-```typescript
-{
-  "completed": boolean,
-  "summary": string,                   // 2-3 sentence content overview
-  "duration": string,                  // Detected from timestamps (e.g., "2:45", "56:32")
-  "is_shortform": boolean,             // True if under 3 minutes
+**A single Markdown document (`brainstorming.md`) containing:**
 
-  "artifacts": {
-    "files_created": [
-      "OUTPUT/{project}/brainstorming.md"  // Always individual project
-    ]
-  },
+- **Content Summary**: 2-3 sentence content overview
+- **Title Options**: 3 distinct options (80 char max)
+- **Short Descriptions**: 2 distinct options (100 char max)
+- **Long Descriptions**: 2 distinct options (350 char max)
+- **SEO Keywords**:
+  - Direct keywords (explicitly mentioned)
+  - Conceptual keywords (themes/topics)
+  - Combined list for CMS
+- **Notable Quotes**: 3-5 key quotes with timestamps/context
+- **Validation Metadata**: Confirmation of character counts and ethical disclaimer
 
-  "keywords": {
-    "direct": string[],                // Explicitly mentioned terms
-    "logical_implied": string[],       // Inferred conceptual themes
-    "combined_list": string,           // Comma-separated (15-20 for standard, 5-10 for shortform)
-    "social_media_focused"?: string[]  // Only for videos under 3 min (5-10 keywords)
-  },
-
-  "key_moments": [
-    {
-      "timestamp": string,             // Approximate time
-      "quote": string,                 // Notable quote or moment
-      "context": string                // Why it's compelling
-    }
-  ],
-
-  "title_description_pairs": [
-    {
-      "title": string,                 // Max 80 chars
-      "short_desc": string,            // Max 100 chars
-      "cohesion_check": "pass" | "fail"  // Do they work together?
-    }
-  ],
-
-  "social_media_optimization"?: {      // Only included for videos under 3 min
-    "description": string,             // 150 chars max, platform-optimized
-    "hashtags": string[],              // 5 recommended tags
-    "platform_notes": {
-      "youtube": string,
-      "instagram": string,
-      "tiktok": string
-    }
-  },
-
-  "next_steps": [
-    "User should review brainstorming options",
-    "If SEO research needed, invoke seo-researcher",
-    "If user has draft copy, invoke copy-editor"
-  ],
-
-  "validation": {
-    "character_counts_verified": boolean,
-    "program_rules_applied": boolean,
-    "ethical_disclaimer_included": boolean,
-    "duration_detected": boolean
-  }
-}
-```
+**Format must strictly follow the template at `.claude/templates/brainstorming-document.md`.**
+**Do NOT output JSON.**
+**Do NOT wrap the output in code blocks.**
 
 ### Failure Modes
 

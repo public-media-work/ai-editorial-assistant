@@ -64,56 +64,17 @@ Generate final deliverables including formatted transcripts and timestamp report
 
 ### Outputs Guaranteed
 
-```typescript
-{
-  "completed": boolean,
-  "summary": string,
+**1. Formatted Transcript (`formatted_transcript.md`)**
+- Clean Markdown file content
+- Starts directly with `# [Subject/Artist Name]...`
+- **NO** conversational text (e.g., "Here is the transcript...")
+- **NO** Markdown code blocks (do not wrap in ` ``` `)
+- **NO** trailing comments
 
-  "artifacts": {
-    "files_created": [
-      "OUTPUT/{project}/formatted_transcript.md",     // If requested
-      "OUTPUT/{project}/timestamp_report.md"          // If requested & 15+ min
-    ]
-  },
-
-  "formatted_transcript": {
-    "speaker_count": number,
-    "total_paragraphs": number,
-    "formatting_rules_applied": [
-      "AP Style compliance",
-      "Full name speaker IDs",
-      "Non-verbal cues in brackets",
-      "New paragraph per speaker change"
-    ],
-    "quality_checks": {
-      "speaker_names_consistent": boolean,
-      "no_orphaned_quotes": boolean,
-      "proper_paragraph_breaks": boolean
-    }
-  },
-
-  "timestamps": {
-    "video_duration_confirmed": string,
-    "chapter_count": number,
-    "formats_provided": ["Media Manager", "YouTube"],
-    "chapter_titles": string[],
-    "natural_breaks_identified": boolean,
-    "disclaimer_included": boolean      // "Timestamps are approximations..."
-  },
-
-  "next_steps": [
-    "User downloads formatted files from OUTPUT/{project}/",
-    "User confirms timestamps on actual video before publishing",
-    "User implements metadata across platforms"
-  ],
-
-  "validation": {
-    "ap_style_verified": boolean,
-    "timestamps_logical": boolean,
-    "platform_compatibility_checked": boolean
-  }
-}
-```
+**2. Timestamp Report (`timestamp_report.md`)**
+- *Only if video is 15+ minutes*
+- Clean Markdown file content
+- Includes both Media Manager table and YouTube list formats
 
 ### Failure Modes
 

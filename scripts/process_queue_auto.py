@@ -241,7 +241,7 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, verbo
     log_event(project_name, "transcript-analyst", "started")
 
     analyst_prompt_template = load_agent_prompt("transcript-analyst")
-    analyst_system = "You are a professional video content analyst generating SEO metadata for PBS Wisconsin video content. Follow the template and guidelines exactly."
+    analyst_system = "You are a professional video content analyst. Generate the brainstorming document in Markdown format exactly as specified. Do NOT output JSON. Do NOT wrap output in code blocks."
     analyst_user = f"{analyst_prompt_template}\n\n# TRANSCRIPT TO ANALYZE\n\n{transcript}"
 
     brainstorming, backend_used, metrics = run_with_fallback("analyst", analyst_user, analyst_system, llm)
@@ -279,7 +279,7 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
     log_event(project_name, "formatter", "started")
 
     formatter_prompt_template = load_agent_prompt("formatter")
-    formatter_system = "You are a professional transcript formatter applying AP Style guidelines for PBS Wisconsin content."
+    formatter_system = "You are a professional transcript formatter applying AP Style guidelines. Output raw Markdown only. Do NOT use code blocks (```). Do NOT add conversational text."
     formatter_user = f"{formatter_prompt_template}\n\n# TRANSCRIPT TO FORMAT\n\n{transcript}"
 
     formatter_output, backend_used, metrics = run_with_fallback("formatter", formatter_user, formatter_system, llm)
