@@ -5,6 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as path from "path";
@@ -975,6 +977,42 @@ const server = new Server(
 // Handle list tools request
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools };
+});
+
+// Handle resource listing
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  const projects = await listProcessedProjects();
+
+  const resources = projects.map((project) => ({
+    uri: `editorial-assistant://project/${project.name}`,
+    name: `${project.name} - ${project.program || 'Unknown'}`,
+    description: project.transcript_summary || `Status: ${project.status}`,
+    mimeType: "application/json"
+  }));
+
+  return { resources };
+});
+
+// Handle resource reading
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const uri = request.params.uri;
+
+  // Parse URI: editorial-assistant://project/{project_name}
+  const match = uri.match(/^editorial-assistant:\/\/project\/(.+)$/);
+  if (!match) {
+    throw new Error(`Invalid resource URI: ${uri}`);
+  }
+
+  const projectName = match[1];
+  const projectData = await loadProjectForEditing(projectName);
+
+  return {
+    contents: [{
+      uri,
+      mimeType: "application/json",
+      text: JSON.stringify(projectData, null, 2)
+    }]
+  };
 });
 
 // Handle tool calls
