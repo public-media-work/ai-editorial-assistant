@@ -4,6 +4,16 @@ The visual dashboard is a Rich-based terminal UI that monitors and controls the 
 
 ---
 
+## Immediate Next Steps (Punchlist)
+
+- Ship full-screen log viewer: filters (Info/Warn/Error), search, smooth scrolling, and non-blocking real-time updates.
+- Upgrade error viewer: modal overlay with full messages, retry/skip actions, and no truncation.
+- Tighten restart semantics: pause/flush in-flight work and persist session before execv; add confirmation when jobs are running.
+- Evaluate web-based monitor: spike a lightweight web UI (FastAPI/Flask + HTMX/Alpine) to mirror dashboard data with richer visuals and easier navigation; compare operator ergonomics vs. CLI.
+- Documentation pass: add CLAUDE.md command reference and a short “operations runbook” for common actions (requeue, export, restart, archive).
+
+---
+
 ## High-Value Enhancements
 
 ### 1. Log Viewer UI (Step 3.2)
