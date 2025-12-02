@@ -65,6 +65,7 @@ class DashboardState:
         self.current_video_length = "-"
         self.start_time = time.time()
         self.logs = []
+        self.full_logs = []  # Unlimited log buffer
         self.queue_data = []
         self.lock = Lock()
         self.session_manager = session_manager
@@ -100,11 +101,33 @@ class DashboardState:
             self.current_video_length = "-"
             self.current_job_start_time = time.time()
 
-    def log(self, message):
+    def log(self, message, level="INFO"):
+        """
+        Log a message with level (INFO, WARN, ERROR).
+
+        Maintains both display buffer (8 lines) and full log buffer (unlimited).
+        Also writes to persistent log file.
+        """
         with self.lock:
-            self.logs.insert(0, f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            log_entry = f"[{timestamp}] [{level}] {message}"
+
+            # Add to display buffer (existing behavior)
+            self.logs.insert(0, log_entry)
             if len(self.logs) > 8:
                 self.logs.pop()
+
+            # Add to full log buffer
+            self.full_logs.append(log_entry)
+
+            # Write to persistent log file
+            log_file = LOG_DIR / "dashboard_session.log"
+            try:
+                log_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(log_file, 'a') as f:
+                    f.write(log_entry + "\n")
+            except Exception:
+                pass  # Don't crash if logging fails
 
     def update_queue(self, queue):
         with self.lock:
@@ -163,7 +186,7 @@ def update_known_prefixes(prefix: str, program_name: str):
 
     # Update memory
     PROGRAM_PREFIXES[prefix] = program_name
-    state.log(f"💡 Learned new prefix: {prefix} = {program_name}")
+    state.log(f"💡 Learned new prefix: {prefix} = {program_name}", "INFO")
 
     # Update file
     prefix_file = PROJECT_ROOT / "knowledge" / "Media ID Prefixes.md"
@@ -240,17 +263,17 @@ def clear_completed_projects():
         # Keep only pending, processing, or failed (maybe user wants to see failed?)
         # The request was "Clear completed projects"
         new_queue = [item for item in queue if item.get("status") != "completed"]
-        
+
         if len(new_queue) < initial_len:
             save_queue(new_queue)
             state.update_queue(new_queue)
-            state.log(f"Cleared {initial_len - len(new_queue)} completed projects")
+            state.log(f"Cleared {initial_len - len(new_queue)} completed projects", "INFO")
         else:
-            state.log("No completed projects to clear")
+            state.log("No completed projects to clear", "INFO")
 
 def check_for_new_projects():
     """Run the check-missed-transcripts.sh script"""
-    state.log("Checking for new transcripts...")
+    state.log("Checking for new transcripts...", "INFO")
     try:
         # Using subprocess to call the existing shell script
         # We use check-missed-transcripts.sh --process to queue them immediately
@@ -260,23 +283,23 @@ def check_for_new_projects():
             capture_output=True,
             text=True
         )
-        
+
         if result.returncode == 0:
             # Check output for confirmation
             if "Queued for agent processing" in result.stdout:
                 count = result.stdout.count("Queued for agent processing")
-                state.log(f"Found and queued {count} new project(s)!")
+                state.log(f"Found and queued {count} new project(s)!", "INFO")
                 # Reload queue immediately
                 state.update_queue(load_queue())
             elif "All transcripts accounted for" in result.stdout:
-                state.log("No new projects found.")
+                state.log("No new projects found.", "INFO")
             else:
-                state.log("Check complete (no changes).")
+                state.log("Check complete (no changes).", "INFO")
         else:
-            state.log(f"Check script failed: {result.stderr[:50]}...")
-            
+            state.log(f"Check script failed: {result.stderr[:50]}...", "ERROR")
+
     except Exception as e:
-        state.log(f"Error running check: {e}")
+        state.log(f"Error running check: {e}", "ERROR")
 
 def load_agent_prompt(agent_name: str) -> str:
     agent_file = AGENTS_DIR / f"{agent_name}.md"
@@ -296,7 +319,7 @@ def load_transcript(project_name: str) -> str:
         try:
             return f.read()
         except UnicodeDecodeError:
-            state.log(f"⚠ Encoding retry (latin-1) for {project_name}")
+            state.log(f"⚠ Encoding retry (latin-1) for {project_name}", "WARN")
             with open(transcript_path, encoding='latin-1') as f_latin1:
                 return f_latin1.read()
 
@@ -375,7 +398,7 @@ def run_with_fallback(agent_key: str, prompt: str, system: str, llm: LLMBackend)
             return response, used_backend, cost
         except Exception as e:
             error_msg = str(e)
-            state.log(f"Retry: {backend_name} failed for {agent_key}")
+            state.log(f"Retry: {backend_name} failed for {agent_key}", "WARN")
 
             # Record error in session
             if state.active_project != "Waiting..." and state.active_project != "IDLE":
@@ -404,12 +427,12 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend) -> st
     state.add_cost(cost)
 
     state.set_progress(100, "Analyst complete")
-    
+
     output_dir = OUTPUT_DIR / project_name
     with open(output_dir / "brainstorming.md", "w") as f:
         f.write(brainstorming)
-    
-    state.log(f"✓ Analyst complete ({len(brainstorming)} chars)")
+
+    state.log(f"✓ Analyst complete ({len(brainstorming)} chars)", "INFO")
     log_event(project_name, "transcript-analyst", "completed", {"backend": backend_used})
     return "brainstorming.md"
 
@@ -429,18 +452,18 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend) -> 
 
     state.set_progress(100, "Formatter complete")
     formatted_transcript, timestamp_report = extract_formatted_transcript_and_timestamps(formatter_output)
-    
+
     output_dir = OUTPUT_DIR / project_name
     with open(output_dir / "formatted_transcript.md", "w") as f:
         f.write(formatted_transcript)
-    
+
     timestamp_filename = None
     if timestamp_report:
         with open(output_dir / "timestamp_report.md", "w") as f:
             f.write(timestamp_report)
         timestamp_filename = "timestamp_report.md"
-    
-    state.log(f"✓ Formatter complete ({len(formatted_transcript)} chars)")
+
+    state.log(f"✓ Formatter complete ({len(formatted_transcript)} chars)", "INFO")
     log_event(project_name, "formatter", "completed", {"backend": backend_used, "timestamps_created": bool(timestamp_filename)})
     return "formatted_transcript.md", timestamp_filename
 
@@ -460,7 +483,7 @@ def skip_current_project(project_name: str):
             project = queue.pop(project_idx)
             queue.append(project)
             save_queue(queue)
-            state.log(f"⏭ Skipped {project_name}")
+            state.log(f"⏭ Skipped {project_name}", "INFO")
 
 def retry_failed_projects():
     """Reset all failed projects to pending."""
@@ -477,7 +500,7 @@ def retry_failed_projects():
                 })
                 count += 1
         if count > 0:
-            state.log(f"🔄 Reset {count} failed project(s)")
+            state.log(f"🔄 Reset {count} failed project(s)", "INFO")
 
 def remove_project(project_name: str):
     """Remove project from queue entirely."""
@@ -485,7 +508,7 @@ def remove_project(project_name: str):
         queue = load_queue()
         queue = [item for item in queue if item['project'] != project_name]
         save_queue(queue)
-        state.log(f"🗑 Removed {project_name}")
+        state.log(f"🗑 Removed {project_name}", "INFO")
 
 def process_project(project_name: str, llm: LLMBackend):
     state.set_active(project_name, "Loading transcript...")
@@ -520,7 +543,7 @@ def process_project(project_name: str, llm: LLMBackend):
                 prefix = project_name[:4]
                 update_known_prefixes(prefix, new_program)
         except Exception as e:
-            state.log(f"⚠ Failed to learn prefix: {e}")
+            state.log(f"⚠ Failed to learn prefix: {e}", "WARN")
 
     update_manifest(project_name, "brainstorming", brainstorming_filename, "transcript-analyst")
     update_manifest(project_name, "formatted_transcript", formatted_filename, "formatter")
@@ -554,6 +577,8 @@ def make_controls_panel():
     text.append(" Skip  ", style="white")
     text.append("[R]", style="bold yellow")
     text.append(" Retry  ", style="white")
+    text.append("[T]", style="bold green")
+    text.append(" Export  ", style="white")
     text.append("[D]", style="bold cyan")
     text.append(" Restart  ", style="white")
     text.append("[Q]", style="bold red")
@@ -620,20 +645,34 @@ def make_queue_table():
         status = item.get('status', 'pending')
         project_name = item['project']
         program_name = get_program_name(project_name)
-        
+
         # Combined project + program cell
         project_cell = f"[bold]{project_name}[/]\n[dim magenta]{program_name}[/]"
 
+        # Enhanced status styling
         status_style = "white"
-        if status == "processing": status_style = "bold cyan"
-        elif status == "completed": status_style = "green"
-        elif status == "failed": status_style = "red"
+        status_icon = ""
+        if status == "processing":
+            status_style = "bold cyan"
+            status_icon = "⚡"
+        elif status == "completed":
+            status_style = "green"
+            status_icon = "✓"
+        elif status == "failed":
+            status_style = "red"
+            status_icon = "🔴"
 
-        # Cost
+        # Cost with color coding based on thresholds
         cost = item.get('cost')
         if cost is not None:
             cost_str = f"${cost:.2f}"
-            cost_style = "bold green"
+            # Color code: green < $0.50, yellow < $2.00, red >= $2.00
+            if cost < 0.50:
+                cost_style = "green"
+            elif cost < 2.00:
+                cost_style = "yellow"
+            else:
+                cost_style = "red bold"
         else:
             est_cost = item.get('estimated_cost', 0.0)
             cost_str = f"~${est_cost:.2f}"
@@ -644,10 +683,11 @@ def make_queue_table():
         if start:
             start = start[11:19] # Extract HH:MM:SS from ISO
 
-        # Add spinner for processing
-        status_txt = Text(status.upper(), style=status_style)
+        # Enhanced status text with icons
         if status == "processing":
-            status_txt = Text("⚡ PROCESSING", style="bold cyan blink")
+            status_txt = Text(f"{status_icon} PROCESSING", style="bold cyan blink")
+        else:
+            status_txt = Text(f"{status_icon} {status.upper()}", style=status_style)
 
         table.add_row(
             project_cell,
@@ -880,10 +920,71 @@ def main():
                         # Skip current project
                         if state.active_project != "IDLE" and state.active_project != "PAUSED":
                             skip_current_project(state.active_project)
-                            state.log(f"⏭ Skipped {state.active_project}")
+                            state.log(f"⏭ Skipped {state.active_project}", "INFO")
                     elif c == 'r':
                         # Retry failed projects
                         retry_failed_projects()
+                    elif c == 't':
+                        # Export session data
+                        # Temporarily restore terminal settings
+                        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+                        try:
+                            from dashboard.exporter import SessionExporter
+                            exporter = SessionExporter(state.session_manager)
+
+                            console.print("\n[bold cyan]═══ Export Session Data ═══[/]")
+                            console.print("Select format:")
+                            console.print("  [1] JSON (complete data)")
+                            console.print("  [2] CSV (tabular)")
+                            console.print("  [3] Markdown summary")
+                            console.print("  [Q] Cancel")
+                            console.print("[cyan]Choice:[/] ", end="")
+
+                            choice = input().lower().strip()
+
+                            if choice == 'q':
+                                console.print("[dim]Export cancelled[/]")
+                            elif choice in ['1', '2', '3']:
+                                # Default filename based on session ID
+                                session_id = state.session_manager.session_data.get('session_id', 'unknown')
+                                timestamp = session_id.split('T')[0] if 'T' in session_id else 'session'
+
+                                if choice == '1':
+                                    default_path = OUTPUT_DIR / "reports" / f"session_{timestamp}.json"
+                                    ext = "json"
+                                elif choice == '2':
+                                    default_path = OUTPUT_DIR / "reports" / f"session_{timestamp}.csv"
+                                    ext = "csv"
+                                else:
+                                    default_path = OUTPUT_DIR / "reports" / f"session_{timestamp}_summary.md"
+                                    ext = "md"
+
+                                console.print(f"[dim]Default: {default_path}[/]")
+                                console.print("[cyan]File path (press Enter for default):[/] ", end="")
+                                custom_path = input().strip()
+
+                                export_path = Path(custom_path) if custom_path else default_path
+
+                                try:
+                                    if choice == '1':
+                                        exporter.export_json(export_path)
+                                    elif choice == '2':
+                                        exporter.export_csv(export_path)
+                                    else:
+                                        exporter.export_summary_md(export_path)
+
+                                    console.print(f"[green]✓ Exported to: {export_path}[/]")
+                                    state.log(f"Exported session to {export_path.name}", "INFO")
+                                except Exception as e:
+                                    console.print(f"[red]✗ Export failed: {e}[/]")
+                                    state.log(f"Export failed: {e}", "ERROR")
+                            else:
+                                console.print("[yellow]Invalid choice[/]")
+
+                            time.sleep(2)
+                        finally:
+                            # Restore cbreak mode
+                            tty.setcbreak(sys.stdin.fileno())
                     elif c == 'd':
                         # Restart dashboard with confirmation
                         # Temporarily restore terminal settings for confirmation
@@ -955,7 +1056,7 @@ def main():
                     successful += 1
                 except Exception as e:
                     error_msg = str(e)
-                    state.log(f"[red]Error: {e}[/]")
+                    state.log(f"[red]Error: {e}[/]", "ERROR")
 
                     # Calculate duration in minutes (even for failures)
                     duration_minutes = 0.0
