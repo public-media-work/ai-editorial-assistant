@@ -73,6 +73,7 @@ class DashboardState:
         self.pause_reason: str | None = None
         self.current_progress: int = 0  # 0-100
         self.progress_message: str = ""
+        self.selected_project: str | None = None
 
     def set_active(self, project, step, backend=None):
         with self.lock:
@@ -531,6 +532,29 @@ def retry_failed_projects():
         if count > 0:
             state.log(f"🔄 Reset {count} failed project(s)", "INFO")
 
+
+def requeue_project(project_name: str):
+    """Reset a single project to pending and clear error metadata."""
+    with QUEUE_LOCK:
+        queue = load_queue()
+        updated = False
+        for item in queue:
+            if item.get("project") == project_name:
+                item.update({
+                    'status': 'pending',
+                    'error': None,
+                    'started_at': None,
+                    'completed_at': None
+                })
+                updated = True
+                break
+        if updated:
+            save_queue(queue)
+            state.update_queue(queue)
+            state.log(f"🔄 Requeued {project_name}", "INFO")
+        else:
+            state.log(f"⚠ Project not found: {project_name}", "WARN")
+
 def remove_project(project_name: str):
     """Remove project from queue entirely."""
     with QUEUE_LOCK:
@@ -541,39 +565,53 @@ def remove_project(project_name: str):
         state.log(f"🗑 Removed {project_name}", "INFO")
 
 
-def show_recent_errors(console: Console, limit: int = 5):
-    """Display recent errors in the console."""
-    errors = state.session_manager.get_errors(limit)
-    if not errors:
-        console.print("[dim]No errors recorded[/]")
+def _paginate_console(console: Console, items: list, render_item, title: str):
+    """Simple pagination helper for console-based viewers."""
+    if not items:
+        console.print(f"[dim]No {title.lower()}[/]")
         return
 
-    console.print("\n[bold red]Recent Errors[/]")
-    for err in errors:
+    idx = 0
+    total = len(items)
+    while True:
+        console.print(f"\n[bold]{title} ({idx + 1}/{total})[/]")
+        console.print(render_item(items[idx]))
+        console.print("[dim][N] next  [P] prev  [Q/Enter] exit[/]", end=" ")
+        choice = input().strip().lower()
+        if choice in ("q", ""):
+            break
+        if choice == "n" and idx < total - 1:
+            idx += 1
+        elif choice == "p" and idx > 0:
+            idx -= 1
+
+
+def show_error_viewer(console: Console):
+    """Display paginated error viewer."""
+    errors = state.session_manager.get_errors()
+
+    def render(err):
         timestamp = err.get("timestamp", "")
         time_str = timestamp[11:19] if len(timestamp) >= 19 else timestamp
         backend = err.get("backend", "unknown")
         project = err.get("project", "Unknown")
         message = err.get("error", "No details")
-        if len(message) > 120:
-            message = message[:117] + "..."
-        console.print(f"{time_str} [{backend}] {project}: {message}")
-    console.print("")
+        return f"{time_str} [{backend}] {project}\n[red]{message}[/]"
+
+    _paginate_console(console, errors, render, "Errors")
 
 
-def show_recent_logs(console: Console, count: int = 20):
-    """Display recent dashboard logs."""
+def show_log_viewer(console: Console, count: int = 100):
+    """Display paginated log viewer."""
     with state.lock:
         logs = list(state.full_logs[-count:])
 
-    if not logs:
-        console.print("[dim]No logs recorded[/]")
-        return
+    logs = list(reversed(logs))  # newest first
 
-    console.print("\n[bold cyan]Recent Logs[/]")
-    for line in reversed(logs):
-        console.print(line)
-    console.print("")
+    def render(line):
+        return line
+
+    _paginate_console(console, logs, render, "Logs")
 
 def process_project(project_name: str, llm: LLMBackend, transcript_file: str | None = None):
     state.set_active(project_name, "Loading transcript...")
@@ -642,6 +680,8 @@ def make_controls_panel():
     text.append(" Skip  ", style="white")
     text.append("[R]", style="bold yellow")
     text.append(" Retry  ", style="white")
+    text.append("[Z]", style="bold yellow")
+    text.append(" Requeue  ", style="white")
     text.append("[E]", style="bold yellow")
     text.append(" Errors  ", style="white")
     text.append("[L]", style="bold yellow")
@@ -760,12 +800,15 @@ def make_queue_table():
         else:
             status_txt = Text(f"{status_icon} {status.upper()}", style=status_style)
 
+        row_style = "on blue" if state.selected_project == project_name else None
+
         table.add_row(
             project_cell,
             status_txt,
             Text(cost_str, style=cost_style),
             est,
-            start
+            start,
+            style=row_style
         )
     return Panel(table, title="[bold white]QUEUE MATRIX[/]", border_style="white")
 
@@ -846,6 +889,24 @@ def generate_layout():
 
 def is_data():
     return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
+
+
+def move_selection(delta: int):
+    """Move queue selection up/down by delta."""
+    with state.lock:
+        if not state.queue_data:
+            state.selected_project = None
+            return
+
+        # Build ordered list of project names
+        projects = [item["project"] for item in state.queue_data]
+        if state.selected_project in projects:
+            idx = projects.index(state.selected_project)
+        else:
+            idx = 0
+
+        new_idx = max(0, min(len(projects) - 1, idx + delta))
+        state.selected_project = projects[new_idx]
 
 # --- RESTART FUNCTIONALITY ---
 
@@ -976,51 +1037,56 @@ def main():
             while True:
                 # Handle Input
                 if is_data():
-                    c = sys.stdin.read(1).lower()
-                    if c == 'q':
+                    c = sys.stdin.read(1)
+                    c_lower = c.lower()
+                    if c_lower == 'q':
                         break
-                    elif c == 'c':
+                    elif c_lower == 'c':
                         clear_completed_projects()
-                    elif c == 'n':
+                    elif c_lower == 'n':
                         check_for_new_projects()
-                    elif c == 'p':
+                    elif c_lower == 'p':
                         # Pause/Resume
                         state.toggle_pause()
                         live.update(generate_layout())
-                    elif c == 's':
-                        # Skip current project
-                        if state.active_project != "IDLE" and state.active_project != "PAUSED":
-                            skip_current_project(state.active_project)
-                            state.log(f"⏭ Skipped {state.active_project}", "INFO")
-                    elif c == 'r':
+                    elif c_lower == 's':
+                        # Skip selected project (fallback to active)
+                        target = state.selected_project or state.active_project
+                        if target and target not in ["IDLE", "PAUSED", "Waiting..."]:
+                            skip_current_project(target)
+                            state.log(f"⏭ Skipped {target}", "INFO")
+                    elif c_lower == 'r':
                         # Retry failed projects
                         retry_failed_projects()
-                    elif c == 'e':
-                        # Show recent errors
+                    elif c_lower == 'z':
+                        # Requeue selected/current project
+                        target = state.selected_project or state.active_project
+                        if target and target not in ["IDLE", "PAUSED", "Waiting..."]:
+                            requeue_project(target)
+                        else:
+                            state.log("⚠ No project selected to requeue", "WARN")
+                    elif c_lower == 'e':
+                        # Show error viewer
                         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
                         try:
-                            show_recent_errors(console, limit=5)
-                            console.print("[dim]Press Enter to continue...[/]")
-                            input()
+                            show_error_viewer(console)
                         finally:
                             tty.setcbreak(sys.stdin.fileno())
-                    elif c == 'l':
-                        # Show recent logs
+                    elif c_lower == 'l':
+                        # Show log viewer
                         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
                         try:
-                            show_recent_logs(console, count=20)
-                            console.print("[dim]Press Enter to continue...[/]")
-                            input()
+                            show_log_viewer(console, count=200)
                         finally:
                             tty.setcbreak(sys.stdin.fileno())
-                    elif c == 'x':
+                    elif c_lower == 'x':
                         # Remove project from queue
                         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
                         try:
-                            default_target = state.active_project if state.active_project not in ["IDLE", "PAUSED", "Waiting..."] else ""
+                            default_target = state.selected_project or (state.active_project if state.active_project not in ["IDLE", "PAUSED", "Waiting..."] else "")
                             console.print("\n[bold red]Remove project from queue[/]")
                             if default_target:
-                                console.print(f"[dim]Press Enter to remove current: {default_target}[/]")
+                                console.print(f"[dim]Press Enter to remove selected/current: {default_target}[/]")
                             console.print("[cyan]Project name:[/] ", end="")
                             target = input().strip() or default_target
                             if target:
@@ -1030,7 +1096,7 @@ def main():
                                 time.sleep(1)
                         finally:
                             tty.setcbreak(sys.stdin.fileno())
-                    elif c == 't':
+                    elif c_lower == 't':
                         # Export session data
                         # Temporarily restore terminal settings
                         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
@@ -1091,7 +1157,7 @@ def main():
                         finally:
                             # Restore cbreak mode
                             tty.setcbreak(sys.stdin.fileno())
-                    elif c == 'd':
+                    elif c_lower == 'd':
                         # Restart dashboard with confirmation
                         # Temporarily restore terminal settings for confirmation
                         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
@@ -1106,6 +1172,15 @@ def main():
                         finally:
                             # Restore cbreak mode
                             tty.setcbreak(sys.stdin.fileno())
+                    elif c == '\x1b':
+                        # Possible arrow key sequences
+                        next_two = sys.stdin.read(2)
+                        if next_two == "[A":  # Up
+                            move_selection(-1)
+                            live.update(generate_layout())
+                        elif next_two == "[B":  # Down
+                            move_selection(1)
+                            live.update(generate_layout())
 
                 # Re-load queue to capture any changes (external or internal)
                 queue = load_queue()

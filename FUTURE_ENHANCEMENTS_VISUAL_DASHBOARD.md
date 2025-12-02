@@ -1,6 +1,6 @@
-# Future Enhancements
+# Visual Dashboard: Future Enhancements
 
-This document tracks optional enhancements that were deferred during dashboard development. All core functionality is complete and production-ready. These are nice-to-have features that can be added if needed in the future.
+The visual dashboard is a Rich-based terminal UI that monitors and controls the Editorial Assistant pipeline: it shows the active job, queue matrix, stats/costs, errors, and lets operators manage work with keyboard commands (pause, skip, retry, requeue, export, restart, etc.). Core features are functional; the items below capture remaining polish and stretch goals.
 
 ---
 
@@ -9,7 +9,7 @@ This document tracks optional enhancements that were deferred during dashboard d
 ### 1. Log Viewer UI (Step 3.2)
 **Priority**: Medium
 **Complexity**: High (~2 hours)
-**Status**: Deferred
+**Status**: Partially Complete
 
 **Description**:
 Full-screen modal log viewer with interactive features:
@@ -19,7 +19,14 @@ Full-screen modal log viewer with interactive features:
 - Real-time log updates while viewing
 - ESC to exit
 
-**Current Workaround**:
+**Current State**:
+- Basic viewer implemented: `[L]` opens a paginated console view of recent logs (newest first) with next/prev navigation.
+- Persistent log file at `logs/dashboard_session.log`.
+
+**Gaps**:
+- No level filters, search, or smooth scrolling; not a full-screen modal.
+
+**Workarounds**:
 - View logs directly: `tail -f logs/dashboard_session.log`
 - Full log buffer accessible in `state.full_logs`
 - All logs persisted to file automatically
@@ -36,7 +43,7 @@ Full-screen modal log viewer with interactive features:
 ### 2. Queue Selection/Navigation (Step 3.7)
 **Priority**: Medium
 **Complexity**: High (~2 hours)
-**Status**: Deferred
+**Status**: Complete
 
 **Description**:
 Interactive queue selection and navigation:
@@ -54,11 +61,8 @@ Interactive queue selection and navigation:
 - Commands work on active/all projects
 
 **Implementation Notes**:
-- Add `selected_project` to DashboardState
-- Modify `make_queue_table()` for highlighting
-- Add arrow key handlers in main loop
-- Update skip/remove to use selection
-- Handle selection persistence with queue updates
+- Implemented: `selected_project`, row highlighting, arrow key handlers, and selection-aware skip/remove/requeue.
+- Commands that act on selection: `[S]` skip, `[X]` remove, `[Z]` requeue single project.
 - See `DASHBOARD_IMPLEMENTATION_ROADMAP.md` Step 3.7 for details
 
 ---
@@ -68,7 +72,7 @@ Interactive queue selection and navigation:
 ### 3. Error Detail Viewer (Step 2.5)
 **Priority**: Low
 **Complexity**: Medium (~1.5 hours)
-**Status**: Deferred
+**Status**: Deferred (basic error viewer exists)
 
 **Description**:
 Modal popup for viewing full error details:
@@ -79,11 +83,14 @@ Modal popup for viewing full error details:
 - Options to retry or skip from viewer
 - Accessible via `[E]` key
 
-**Current Workaround**:
-- Error panel shows last 3 errors (truncated to 60 chars)
-- Full errors in session export (JSON/Markdown)
-- Full errors in `logs/dashboard_session.log`
-- Session manager tracks all errors
+**Current State**:
+- `[E]` opens a paginated error viewer (newest first) with next/prev navigation.
+- Error panel shows last 3 errors (truncated to 60 chars).
+- Full errors in session export (JSON/Markdown) and `logs/dashboard_session.log`.
+- Session manager tracks all errors.
+
+**Gaps**:
+- Not a modal overlay; no retry/skip actions from viewer; no stack traces; truncation still present in panel.
 
 **Implementation Notes**:
 - Similar modal pattern to log viewer
