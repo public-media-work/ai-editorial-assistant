@@ -266,4 +266,15 @@ def make_progress_bar(
     Returns:
         Rich ProgressBar widget
     """
-    pass
+    # Clamp percentage and build bar
+    percent = max(0, min(100, percent))
+    filled = int((percent / 100) * width)
+    bar = "█" * filled + "░" * (width - filled)
+
+    text = Text()
+    text.append(bar, style="cyan")
+    text.append(f" {percent:3d}%", style="white")
+    if message:
+        text.append(f"  {message}", style="dim")
+
+    return Panel(text, box=box.SIMPLE, border_style="cyan")

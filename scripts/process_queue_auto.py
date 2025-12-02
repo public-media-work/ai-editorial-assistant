@@ -76,26 +76,41 @@ def load_agent_prompt(agent_name: str) -> str:
         return f.read()
 
 
-def load_transcript(project_name: str) -> str:
-    """Load transcript content"""
-    # Try transcripts directory first
-    transcript_path = TRANSCRIPTS_DIR / f"{project_name}_ForClaude.txt"
+def _candidate_transcript_paths(project_name: str, transcript_file: str | None = None) -> list[Path]:
+    candidates: list[Path] = []
+    if transcript_file:
+        candidates.append(TRANSCRIPTS_DIR / transcript_file)
+        candidates.append(TRANSCRIPTS_DIR / "archive" / transcript_file)
 
-    if not transcript_path.exists():
-        # Try archive
-        transcript_path = TRANSCRIPTS_DIR / "archive" / f"{project_name}_ForClaude.txt"
+    candidates.append(TRANSCRIPTS_DIR / f"{project_name}_ForClaude.txt")
+    candidates.append(TRANSCRIPTS_DIR / "archive" / f"{project_name}_ForClaude.txt")
+    candidates.append(TRANSCRIPTS_DIR / f"{project_name}.txt")
+    candidates.append(TRANSCRIPTS_DIR / "archive" / f"{project_name}.txt")
+    candidates.extend(TRANSCRIPTS_DIR.glob(f"{project_name}*.txt"))
+    candidates.extend((TRANSCRIPTS_DIR / "archive").glob(f"{project_name}*.txt"))
 
-    if not transcript_path.exists():
-        raise FileNotFoundError(f"Transcript not found for {project_name}")
+    seen = set()
+    ordered: list[Path] = []
+    for path in candidates:
+        if path not in seen:
+            seen.add(path)
+            ordered.append(path)
+    return ordered
 
-    with open(transcript_path, encoding='utf-8') as f:
-        try:
-            return f.read()
-        except UnicodeDecodeError:
-            # If UTF-8 fails, try a more lenient encoding like latin-1
-            print(f"    ⚠ UnicodeDecodeError with UTF-8 for {transcript_path}, trying latin-1.")
-            with open(transcript_path, encoding='latin-1') as f_latin1:
-                return f_latin1.read()
+
+def load_transcript(project_name: str, transcript_file: str | None = None) -> str:
+    """Load transcript content (supports legacy _ForClaude and raw filenames)."""
+    for transcript_path in _candidate_transcript_paths(project_name, transcript_file):
+        if transcript_path.exists():
+            with open(transcript_path, encoding='utf-8') as f:
+                try:
+                    return f.read()
+                except UnicodeDecodeError:
+                    print(f"    ⚠ UnicodeDecodeError with UTF-8 for {transcript_path}, trying latin-1.")
+                    with open(transcript_path, encoding='latin-1') as f_latin1:
+                        return f_latin1.read()
+
+    raise FileNotFoundError(f"Transcript not found for {project_name}")
 
 
 def update_manifest(project_name: str, deliverable_type: str, filename: str, agent: str, metrics: dict | None = None):
@@ -321,7 +336,7 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
     return "formatted_transcript.md", timestamp_filename, metrics_dict
 
 
-def process_project(project_name: str, llm: LLMBackend, verbose: bool = True):
+def process_project(project_name: str, llm: LLMBackend, verbose: bool = True, transcript_file: str | None = None):
     """Process a single project with both agents"""
     if verbose:
         print(f"\n{'='*60}")
@@ -331,7 +346,7 @@ def process_project(project_name: str, llm: LLMBackend, verbose: bool = True):
     # Load transcript
     if verbose:
         print("\n→ Loading transcript...")
-    transcript = load_transcript(project_name)
+    transcript = load_transcript(project_name, transcript_file)
     if verbose:
         print(f"  ✓ Loaded ({len(transcript)} chars)")
 
@@ -371,10 +386,10 @@ def process_project(project_name: str, llm: LLMBackend, verbose: bool = True):
 CHARS_PER_MINUTE_PROCESSING = 2000 # Heuristic: X characters processed per minute for both agents
 
 
-def get_transcript_length(project_name: str) -> int:
+def get_transcript_length(project_name: str, transcript_file: str | None = None) -> int:
     """Safely get the length of the transcript content."""
     try:
-        transcript = load_transcript(project_name)
+        transcript = load_transcript(project_name, transcript_file)
         return len(transcript)
     except FileNotFoundError:
         return 0 # Indicate transcript not found or empty
@@ -413,7 +428,7 @@ def main():
     queue_updated_with_estimates = False
     for i, item in enumerate(queue):
         if item.get("status") == "pending" and "estimated_processing_minutes" not in item:
-            transcript_len = get_transcript_length(item['project'])
+            transcript_len = get_transcript_length(item['project'], item.get("transcript_file"))
             queue[i]["transcript_length_chars"] = transcript_len
             queue[i]["estimated_processing_minutes"] = calculate_estimated_time(transcript_len)
             queue_updated_with_estimates = True
@@ -445,11 +460,13 @@ def main():
             print(f"\n→ Skipping {project_name} (already completed)")
             continue
 
+        transcript_file = item.get("transcript_file")
+
         start_time = datetime.utcnow().isoformat() + "Z"
         update_queue_item(project_name, {"status": "processing", "started_at": start_time, "error": None})
 
         try:
-            process_project(project_name, llm)
+            process_project(project_name, llm, transcript_file=transcript_file)
             update_queue_item(project_name, {
                 "status": "completed",
                 "completed_at": datetime.utcnow().isoformat() + "Z"

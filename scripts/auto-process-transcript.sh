@@ -14,8 +14,21 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TRANSCRIPTS_DIR="$PROJECT_ROOT/transcripts"
 OUTPUT_DIR="$PROJECT_ROOT/OUTPUT"
 
+# Helper: derive project name from a transcript filename
+project_name_from_file() {
+  local fname="$1"
+  fname="${fname##*/}"
+  fname="${fname%.txt}"
+  fname="${fname%_ForClaude}"
+  fname="${fname%.mp4}"
+  fname="${fname%.mov}"
+  fname="${fname%.mkv}"
+  fname="${fname%.srt}"
+  echo "$fname"
+}
+
 transcript_file=$(basename "$1")
-transcript_name="${transcript_file%_ForClaude.txt}"
+transcript_name="$(project_name_from_file "$transcript_file")"
 project_dir="$OUTPUT_DIR/$transcript_name"
 
 # Colors

@@ -9,6 +9,20 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TRANSCRIPTS_DIR="$PROJECT_ROOT/transcripts"
 WATCH_STATE="$PROJECT_ROOT/.watch-state"
 OUTPUT_DIR="$PROJECT_ROOT/OUTPUT"
+ARCHIVE_DIR="$TRANSCRIPTS_DIR/archive"
+
+# Helper: derive project name from a transcript filename
+project_name_from_file() {
+  local fname="$1"
+  fname="${fname##*/}"        # strip path
+  fname="${fname%.txt}"       # strip .txt
+  fname="${fname%_ForClaude}" # strip legacy suffix
+  fname="${fname%.mp4}"       # strip common media extensions
+  fname="${fname%.mov}"
+  fname="${fname%.mkv}"
+  fname="${fname%.srt}"
+  echo "$fname"
+}
 
 # Colors
 GREEN='\033[0;32m'
@@ -43,16 +57,17 @@ cd "$TRANSCRIPTS_DIR"
 echo -e "${BLUE}Scanning transcripts directory...${NC}"
 echo ""
 
-for transcript_file in *_ForClaude.txt; do
+shopt -s nullglob
+for transcript_file in *.txt; do
   # Skip if no files found
   [[ -e "$transcript_file" ]] || continue
 
   total_transcripts=$((total_transcripts + 1))
+  transcript_name="$(project_name_from_file "$transcript_file")"
 
   # Check if in watch state
   if echo "$processed_files" | jq -e ". | index(\"$transcript_file\")" > /dev/null 2>&1; then
     # In watch state - check if actually processed
-    transcript_name="${transcript_file%_ForClaude.txt}"
     project_dir="$OUTPUT_DIR/$transcript_name"
 
     if [ -d "$project_dir" ]; then
@@ -79,7 +94,6 @@ for transcript_file in *_ForClaude.txt; do
     total_missed=$((total_missed + 1))
 
     if [[ "$PROCESS_MODE" == true ]]; then
-      transcript_name="${transcript_file%_ForClaude.txt}"
       echo -e "  ${BLUE}→${NC} Processing now..."
       cd "$PROJECT_ROOT"
       if ./scripts/batch-process-transcripts.sh "$transcript_file" > /dev/null 2>&1; then

@@ -178,11 +178,30 @@ class SessionManager:
         Return current session statistics.
 
         Returns:
-            Session statistics dictionary with aggregated data
+            Session statistics dictionary with aggregated data and recent errors
         """
         with self.lock:
             # Return a copy to prevent external modifications
-            return dict(self.session_data["stats"])
+            stats_copy = dict(self.session_data["stats"])
+            # Include errors so consumers (e.g., UI panels) can render them
+            stats_copy["errors"] = list(self.session_data.get("errors", []))
+            return stats_copy
+
+    def get_errors(self, limit: int | None = None) -> list[dict]:
+        """
+        Return recent errors recorded in the session.
+
+        Args:
+            limit: Optional maximum number of errors to return (most recent first)
+
+        Returns:
+            List of error records with timestamp, project, error, backend
+        """
+        with self.lock:
+            errors = list(self.session_data.get("errors", []))
+            if limit is not None:
+                return list(reversed(errors[-limit:]))
+            return list(reversed(errors))
 
     def get_cost_timeline(self, minutes: int = 60) -> list:
         """

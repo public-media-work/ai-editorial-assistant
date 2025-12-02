@@ -308,20 +308,49 @@ def load_agent_prompt(agent_name: str) -> str:
     with open(agent_file) as f:
         return f.read()
 
-def load_transcript(project_name: str) -> str:
-    transcript_path = TRANSCRIPTS_DIR / f"{project_name}_ForClaude.txt"
-    if not transcript_path.exists():
-        transcript_path = TRANSCRIPTS_DIR / "archive" / f"{project_name}_ForClaude.txt"
-    if not transcript_path.exists():
-        raise FileNotFoundError(f"Transcript not found for {project_name}")
-    
-    with open(transcript_path, encoding='utf-8') as f:
-        try:
-            return f.read()
-        except UnicodeDecodeError:
-            state.log(f"⚠ Encoding retry (latin-1) for {project_name}", "WARN")
-            with open(transcript_path, encoding='latin-1') as f_latin1:
-                return f_latin1.read()
+def _candidate_transcript_paths(project_name: str, transcript_file: str | None = None) -> list[Path]:
+    """Return candidate transcript paths for a project."""
+    candidates = []
+    if transcript_file:
+        candidates.append(TRANSCRIPTS_DIR / transcript_file)
+        candidates.append(TRANSCRIPTS_DIR / "archive" / transcript_file)
+
+    # Legacy pattern
+    candidates.append(TRANSCRIPTS_DIR / f"{project_name}_ForClaude.txt")
+    candidates.append(TRANSCRIPTS_DIR / "archive" / f"{project_name}_ForClaude.txt")
+
+    # Raw transcript names (e.g., project.txt or project.<ext>.txt)
+    candidates.append(TRANSCRIPTS_DIR / f"{project_name}.txt")
+    candidates.append(TRANSCRIPTS_DIR / "archive" / f"{project_name}.txt")
+    candidates.extend(TRANSCRIPTS_DIR.glob(f"{project_name}*.txt"))
+    candidates.extend((TRANSCRIPTS_DIR / "archive").glob(f"{project_name}*.txt"))
+
+    # Deduplicate while preserving order
+    seen = set()
+    ordered = []
+    for path in candidates:
+        if path not in seen:
+            seen.add(path)
+            ordered.append(path)
+    return ordered
+
+
+def load_transcript(project_name: str, transcript_file: str | None = None) -> str:
+    """
+    Load a transcript for the given project, supporting both legacy _ForClaude
+    filenames and raw transcript filenames (e.g., project.mp4.txt).
+    """
+    for transcript_path in _candidate_transcript_paths(project_name, transcript_file):
+        if transcript_path.exists():
+            with open(transcript_path, encoding='utf-8') as f:
+                try:
+                    return f.read()
+                except UnicodeDecodeError:
+                    state.log(f"⚠ Encoding retry (latin-1) for {project_name}", "WARN")
+                    with open(transcript_path, encoding='latin-1') as f_latin1:
+                        return f_latin1.read()
+
+    raise FileNotFoundError(f"Transcript not found for {project_name}")
 
 def update_manifest(project_name: str, deliverable_type: str, filename: str, agent: str):
     manifest_path = OUTPUT_DIR / project_name / "manifest.json"
@@ -508,11 +537,47 @@ def remove_project(project_name: str):
         queue = load_queue()
         queue = [item for item in queue if item['project'] != project_name]
         save_queue(queue)
+        state.update_queue(queue)
         state.log(f"🗑 Removed {project_name}", "INFO")
 
-def process_project(project_name: str, llm: LLMBackend):
+
+def show_recent_errors(console: Console, limit: int = 5):
+    """Display recent errors in the console."""
+    errors = state.session_manager.get_errors(limit)
+    if not errors:
+        console.print("[dim]No errors recorded[/]")
+        return
+
+    console.print("\n[bold red]Recent Errors[/]")
+    for err in errors:
+        timestamp = err.get("timestamp", "")
+        time_str = timestamp[11:19] if len(timestamp) >= 19 else timestamp
+        backend = err.get("backend", "unknown")
+        project = err.get("project", "Unknown")
+        message = err.get("error", "No details")
+        if len(message) > 120:
+            message = message[:117] + "..."
+        console.print(f"{time_str} [{backend}] {project}: {message}")
+    console.print("")
+
+
+def show_recent_logs(console: Console, count: int = 20):
+    """Display recent dashboard logs."""
+    with state.lock:
+        logs = list(state.full_logs[-count:])
+
+    if not logs:
+        console.print("[dim]No logs recorded[/]")
+        return
+
+    console.print("\n[bold cyan]Recent Logs[/]")
+    for line in reversed(logs):
+        console.print(line)
+    console.print("")
+
+def process_project(project_name: str, llm: LLMBackend, transcript_file: str | None = None):
     state.set_active(project_name, "Loading transcript...")
-    transcript = load_transcript(project_name)
+    transcript = load_transcript(project_name, transcript_file)
     
     state.reset_job_stats()
     state.set_video_length(estimate_video_duration(transcript))
@@ -577,6 +642,12 @@ def make_controls_panel():
     text.append(" Skip  ", style="white")
     text.append("[R]", style="bold yellow")
     text.append(" Retry  ", style="white")
+    text.append("[E]", style="bold yellow")
+    text.append(" Errors  ", style="white")
+    text.append("[L]", style="bold yellow")
+    text.append(" Logs  ", style="white")
+    text.append("[X]", style="bold yellow")
+    text.append(" Remove  ", style="white")
     text.append("[T]", style="bold green")
     text.append(" Export  ", style="white")
     text.append("[D]", style="bold cyan")
@@ -880,7 +951,7 @@ def main():
             if item.get("status") == "pending" and "estimated_processing_minutes" not in item:
                 # Simple Estimate logic duplicate
                 try:
-                    t_len = len(load_transcript(item['project']))
+                    t_len = len(load_transcript(item['project'], item.get("transcript_file")))
                     est = max(1.0, round(t_len / 2000, 2))
                     est_cost = round(t_len * 0.000005, 4) # Rough estimate for Sonnet
                 except:
@@ -924,6 +995,41 @@ def main():
                     elif c == 'r':
                         # Retry failed projects
                         retry_failed_projects()
+                    elif c == 'e':
+                        # Show recent errors
+                        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+                        try:
+                            show_recent_errors(console, limit=5)
+                            console.print("[dim]Press Enter to continue...[/]")
+                            input()
+                        finally:
+                            tty.setcbreak(sys.stdin.fileno())
+                    elif c == 'l':
+                        # Show recent logs
+                        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+                        try:
+                            show_recent_logs(console, count=20)
+                            console.print("[dim]Press Enter to continue...[/]")
+                            input()
+                        finally:
+                            tty.setcbreak(sys.stdin.fileno())
+                    elif c == 'x':
+                        # Remove project from queue
+                        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+                        try:
+                            default_target = state.active_project if state.active_project not in ["IDLE", "PAUSED", "Waiting..."] else ""
+                            console.print("\n[bold red]Remove project from queue[/]")
+                            if default_target:
+                                console.print(f"[dim]Press Enter to remove current: {default_target}[/]")
+                            console.print("[cyan]Project name:[/] ", end="")
+                            target = input().strip() or default_target
+                            if target:
+                                remove_project(target)
+                            else:
+                                console.print("[dim]Remove cancelled[/]")
+                                time.sleep(1)
+                        finally:
+                            tty.setcbreak(sys.stdin.fileno())
                     elif c == 't':
                         # Export session data
                         # Temporarily restore terminal settings
@@ -1032,7 +1138,7 @@ def main():
                 update_queue_item(project_name, {"status": "processing", "started_at": start_time, "error": None})
                 
                 try:
-                    process_project(project_name, llm)
+                    process_project(project_name, llm, transcript_file=item.get("transcript_file"))
                     final_cost = state.current_job_cost
 
                     # Calculate duration in minutes

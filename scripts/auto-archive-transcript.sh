@@ -16,10 +16,39 @@ OUTPUT_DIR="$PROJECT_ROOT/OUTPUT"
 ARCHIVE_DIR="$TRANSCRIPTS_DIR/archive"
 
 project_name="$1"
-transcript_file="${project_name}_ForClaude.txt"
-transcript_path="$TRANSCRIPTS_DIR/$transcript_file"
 project_dir="$OUTPUT_DIR/$project_name"
 manifest_path="$project_dir/manifest.json"
+
+# Helper to find transcript path (supports legacy and raw names)
+find_transcript_path() {
+  local name="$1"
+  local manifest_file="$2"
+
+  local manifest_transcript=""
+  if [ -f "$manifest_file" ] && command -v jq >/dev/null 2>&1; then
+    manifest_transcript=$(jq -r '.transcript_file // empty' "$manifest_file")
+  fi
+
+  local candidates=()
+  if [ -n "$manifest_transcript" ]; then
+    candidates+=("$TRANSCRIPTS_DIR/$manifest_transcript" "$TRANSCRIPTS_DIR/archive/$manifest_transcript")
+  fi
+
+  candidates+=("$TRANSCRIPTS_DIR/${name}_ForClaude.txt" "$TRANSCRIPTS_DIR/archive/${name}_ForClaude.txt")
+  candidates+=("$TRANSCRIPTS_DIR/${name}.txt" "$TRANSCRIPTS_DIR/archive/${name}.txt")
+  candidates+=($(ls "$TRANSCRIPTS_DIR"/${name}*.txt 2>/dev/null))
+  candidates+=($(ls "$TRANSCRIPTS_DIR"/archive/${name}*.txt 2>/dev/null))
+
+  for path in "${candidates[@]}"; do
+    if [ -f "$path" ]; then
+      echo "$path"
+      return 0
+    fi
+  done
+
+  echo ""
+  return 1
+}
 
 # Colors
 GREEN='\033[0;32m'
@@ -31,17 +60,19 @@ NC='\033[0m'
 # Create archive directory if it doesn't exist
 mkdir -p "$ARCHIVE_DIR"
 
-# Check if transcript exists
-if [ ! -f "$transcript_path" ]; then
-  echo -e "${YELLOW}Transcript not found (may already be archived): $transcript_file${NC}"
-  exit 0
-fi
-
 # Check if manifest exists
 if [ ! -f "$manifest_path" ]; then
   echo -e "${RED}Error: Manifest not found: $manifest_path${NC}"
   exit 1
 fi
+
+transcript_path="$(find_transcript_path "$project_name" "$manifest_path")"
+if [ -z "$transcript_path" ]; then
+  echo -e "${YELLOW}Transcript not found (may already be archived): ${project_name}${NC}"
+  exit 0
+fi
+
+transcript_file="$(basename "$transcript_path")"
 
 # Check if processing is complete
 has_brainstorming=$(grep '"brainstorming"' "$manifest_path" | grep -v 'null' || echo "")

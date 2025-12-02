@@ -11,6 +11,19 @@ OUTPUT_DIR="$PROJECT_ROOT/OUTPUT"
 ARCHIVE_DIR="$TRANSCRIPTS_DIR/archive"
 PROCESSING_LOG="$PROJECT_ROOT/.processing-log.json"
 
+# Helper: derive project name from a transcript filename
+project_name_from_file() {
+  local fname="$1"
+  fname="${fname##*/}"
+  fname="${fname%.txt}"
+  fname="${fname%_ForClaude}"
+  fname="${fname%.mp4}"
+  fname="${fname%.mov}"
+  fname="${fname%.mkv}"
+  fname="${fname%.srt}"
+  echo "$fname"
+}
+
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -30,9 +43,9 @@ if [ -n "$1" ]; then
   # Process specific file
   TRANSCRIPTS=("$1")
 else
-  # Find all .txt files NOT in archive
+  # Find all .txt files NOT in archive (includes legacy _ForClaude)
   cd "$TRANSCRIPTS_DIR"
-  TRANSCRIPTS=($(find . -maxdepth 1 -name "*_ForClaude.txt" -type f))
+  TRANSCRIPTS=($(find . -maxdepth 1 -name "*.txt" -type f))
 fi
 
 if [ ${#TRANSCRIPTS[@]} -eq 0 ]; then
@@ -49,7 +62,7 @@ echo ""
 # Process each transcript
 for transcript in "${TRANSCRIPTS[@]}"; do
   transcript_file=$(basename "$transcript")
-  transcript_name="${transcript_file%_ForClaude.txt}"
+  transcript_name="$(project_name_from_file "$transcript_file")"
 
   echo -e "${BLUE}Processing: $transcript_name${NC}"
 

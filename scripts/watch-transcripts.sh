@@ -9,6 +9,19 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TRANSCRIPTS_DIR="$PROJECT_ROOT/transcripts"
 WATCH_STATE="$PROJECT_ROOT/.watch-state"
 
+# Helper: derive project name from a transcript filename
+project_name_from_file() {
+  local fname="$1"
+  fname="${fname##*/}"
+  fname="${fname%.txt}"
+  fname="${fname%_ForClaude}"
+  fname="${fname%.mp4}"
+  fname="${fname%.mov}"
+  fname="${fname%.mkv}"
+  fname="${fname%.srt}"
+  echo "$fname"
+}
+
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -93,7 +106,7 @@ while true; do
   # Find new transcript files
   cd "$TRANSCRIPTS_DIR"
 
-  for transcript_file in *_ForClaude.txt; do
+  for transcript_file in *.txt; do
     # Skip if no files found
     [[ -e "$transcript_file" ]] || continue
 
@@ -111,7 +124,7 @@ while true; do
 
     if ./scripts/batch-process-transcripts.sh "$transcript_file" 2>&1 | grep -v "^$"; then
       # Extract project name
-      project_name="${transcript_file%_ForClaude.txt}"
+      project_name="$(project_name_from_file "$transcript_file")"
 
       echo -e "  ${GREEN}✓${NC} Project setup complete: ${CYAN}$project_name${NC}"
 

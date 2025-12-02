@@ -11,6 +11,19 @@ TRANSCRIPTS_DIR="$PROJECT_ROOT/transcripts"
 OUTPUT_DIR="$PROJECT_ROOT/OUTPUT"
 ARCHIVE_DIR="$TRANSCRIPTS_DIR/archive"
 
+# Helper: derive project name from a transcript filename
+project_name_from_file() {
+  local fname="$1"
+  fname="${fname##*/}"
+  fname="${fname%.txt}"
+  fname="${fname%_ForClaude}"
+  fname="${fname%.mp4}"
+  fname="${fname%.mov}"
+  fname="${fname%.mkv}"
+  fname="${fname%.srt}"
+  echo "$fname"
+}
+
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -39,14 +52,14 @@ total_incomplete=0
 
 # Find all transcript files
 cd "$TRANSCRIPTS_DIR"
-for transcript_file in *_ForClaude.txt; do
+for transcript_file in *.txt; do
   # Skip if no files found
   [[ -e "$transcript_file" ]] || continue
 
   total_checked=$((total_checked + 1))
 
   # Extract project name
-  transcript_name="${transcript_file%_ForClaude.txt}"
+  transcript_name="$(project_name_from_file "$transcript_file")"
   project_dir="$OUTPUT_DIR/$transcript_name"
 
   # Check if project directory exists
