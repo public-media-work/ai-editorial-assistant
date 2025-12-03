@@ -42,12 +42,38 @@
       "api_key_env": "ANTHROPIC_API_KEY",
       "timeout": 180,
       "cost_per_project": 0.25
+    },
+    "gemini-flash": {
+      "type": "gemini",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+      "model": "gemini-1.5-flash",
+      "api_key_env": "GOOGLE_API_KEY",
+      "timeout": 180,
+      "cost_per_project": 0.015
+    },
+    "gemini-flash-8b": {
+      "type": "gemini",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent",
+      "model": "gemini-1.5-flash-8b",
+      "api_key_env": "GOOGLE_API_KEY",
+      "timeout": 180,
+      "cost_per_project": 0.008
+    },
+    "gemini-pro": {
+      "type": "gemini",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent",
+      "model": "gemini-1.5-pro",
+      "api_key_env": "GOOGLE_API_KEY",
+      "timeout": 240,
+      "cost_per_project": 0.08
     }
   },
 
   "auto_select": {
-    "enabled": false,
+    "enabled": true,
     "preference_order": [
+      "gemini-flash",
+      "gemini-flash-8b",
       "openai-mini",
       "openai",
       "claude"

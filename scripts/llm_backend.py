@@ -27,8 +27,9 @@ try:
 except ImportError:
     pass  # python-dotenv not installed, continuing without it
 
-# OpenAI pricing per 1M tokens (as of 2024)
-# https://openai.com/api/pricing/
+# OpenAI pricing per 1M tokens
+# Last updated: 2024-12-03
+# Source: https://openai.com/api/pricing/
 OPENAI_PRICING = {
     "gpt-4o-mini": {"input": 0.150, "output": 0.600},  # per 1M tokens
     "gpt-4o": {"input": 2.50, "output": 10.00},
@@ -36,11 +37,27 @@ OPENAI_PRICING = {
 }
 
 # Anthropic pricing per 1M tokens
-# https://www.anthropic.com/pricing
+# Last updated: 2024-12-03
+# Source: https://www.anthropic.com/pricing
 ANTHROPIC_PRICING = {
     "claude-3-5-sonnet-latest": {"input": 3.00, "output": 15.00},
     "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
     "claude-3-5-haiku-latest": {"input": 1.00, "output": 5.00},
+    "claude-3-5-haiku-20241022": {"input": 1.00, "output": 5.00},
+    "claude-3-opus-latest": {"input": 15.00, "output": 75.00},
+    "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
+    "claude-3-sonnet-20240229": {"input": 3.00, "output": 15.00},
+    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
+}
+
+# Google Gemini pricing per 1M tokens
+# Last updated: 2024-12-03
+# Source: https://ai.google.dev/pricing
+GEMINI_PRICING = {
+    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},  # Up to 1M context
+    "gemini-1.5-flash-8b": {"input": 0.0375, "output": 0.15},  # Up to 1M context, cheaper
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},  # Up to 2M context
+    "gemini-2.0-flash-exp": {"input": 0.0, "output": 0.0},  # Free experimental (no SLA)
 }
 
 class LLMBackend:
@@ -75,6 +92,13 @@ class LLMBackend:
             output_cost = (output_tokens / 1_000_000) * pricing["output"]
             return input_cost + output_cost
 
+        # Check Gemini pricing
+        if model in GEMINI_PRICING:
+            pricing = GEMINI_PRICING[model]
+            input_cost = (input_tokens / 1_000_000) * pricing["input"]
+            output_cost = (output_tokens / 1_000_000) * pricing["output"]
+            return input_cost + output_cost
+
         # Unknown model - return 0
         return 0.0
 
@@ -98,7 +122,7 @@ class LLMBackend:
                 print(f"  ✗ {backend_name} unavailable: {e}")
                 return False
 
-        elif backend["type"] in ["openai", "anthropic"]:
+        elif backend["type"] in ["openai", "anthropic", "gemini"]:
             # Check if API key exists
             api_key_env = backend.get("api_key_env")
             has_key = api_key_env and os.getenv(api_key_env) is not None
@@ -271,6 +295,69 @@ class LLMBackend:
 
         return content, metrics
 
+    def call_gemini(self, backend: Dict, prompt: str, system: str) -> tuple[str, UsageMetrics]:
+        """Call Google Gemini API and return response with usage metrics"""
+        print(f"    Calling Gemini ({backend['model']})...")
+
+        api_key = os.getenv(backend["api_key_env"])
+
+        # Gemini API uses a different format - combine system and prompt
+        combined_prompt = f"{system}\n\n{prompt}"
+
+        response = requests.post(
+            f"{backend['endpoint']}?key={api_key}",
+            headers={
+                "Content-Type": "application/json"
+            },
+            json={
+                "contents": [{
+                    "parts": [{
+                        "text": combined_prompt
+                    }]
+                }],
+                "generationConfig": {
+                    "temperature": 0.7,
+                    "topP": 0.9,
+                    "maxOutputTokens": 8192
+                }
+            },
+            timeout=backend["timeout"]
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Gemini API error: {response.status_code} - {response.text}")
+
+        data = response.json()
+
+        # Extract content from Gemini response
+        if "candidates" not in data or len(data["candidates"]) == 0:
+            raise Exception("Gemini API returned no candidates")
+
+        content = data["candidates"][0]["content"]["parts"][0]["text"]
+
+        # Extract usage data
+        usage = data.get("usageMetadata", {})
+        input_tokens = usage.get("promptTokenCount", 0)
+        output_tokens = usage.get("candidatesTokenCount", 0)
+        total_tokens = usage.get("totalTokenCount", input_tokens + output_tokens)
+
+        # Calculate cost
+        model = backend["model"]
+        cost = self.calculate_cost(model, input_tokens, output_tokens)
+
+        metrics = UsageMetrics(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            estimated_cost=cost,
+            model=model,
+            backend="gemini"
+        )
+
+        print(f"    Tokens: {input_tokens} in + {output_tokens} out = {total_tokens} total (${cost:.4f})")
+
+        return content, metrics
+
     def generate(self, prompt: str, system: str,
                  backend_name: Optional[str] = None) -> tuple[str, str, UsageMetrics]:
         """
@@ -293,6 +380,8 @@ class LLMBackend:
             response, metrics = self.call_openai(backend, prompt, system)
         elif backend["type"] == "anthropic":
             response, metrics = self.call_anthropic(backend, prompt, system)
+        elif backend["type"] == "gemini":
+            response, metrics = self.call_gemini(backend, prompt, system)
         else:
             raise Exception(f"Unknown backend type: {backend['type']}")
 

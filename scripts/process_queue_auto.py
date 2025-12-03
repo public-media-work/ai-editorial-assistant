@@ -28,10 +28,17 @@ QUEUE_LOCK = Lock()
 MANIFEST_LOCK = Lock()
 
 # Optional per-agent backend preferences; falls back to llm-config auto_select order
+# analyst: Use cheap model for brainstorming
+# formatter: Prefer Gemini Flash (1M context, fast, cheap) for formatting large transcripts
 BACKEND_PREFERENCES = {
-    "analyst": [],
-    "formatter": []
+    "analyst": ["openai-mini", "gemini-flash-8b"],
+    "formatter": ["gemini-flash", "openai-mini"]
 }
+
+# Transcript length threshold for auto-upgrading formatter to gpt-4o (in characters)
+# Based on observed data: 60K+ token transcripts = ~240K+ characters
+# Setting threshold at 200K chars to catch large transcripts before they timeout
+FORMATTER_LARGE_TRANSCRIPT_THRESHOLD = 200000
 
 
 def load_queue():
@@ -293,11 +300,29 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
         print("\n→ Running formatter agent...")
     log_event(project_name, "formatter", "started")
 
+    # Check transcript length and dynamically adjust backend preference for large transcripts
+    transcript_length = len(transcript)
+    if transcript_length > FORMATTER_LARGE_TRANSCRIPT_THRESHOLD:
+        # Large transcript detected - prefer Gemini Pro (2M context) or gpt-4o for better performance
+        if verbose:
+            print(f"  ⚠ Large transcript detected ({transcript_length:,} chars) - upgrading to Gemini Pro (2M context)")
+        log_event(project_name, "formatter", "large_transcript_detected", {"length": transcript_length, "upgrade_to": "gemini-pro"})
+        # Temporarily override backend preference for this call
+        original_prefs = BACKEND_PREFERENCES.get("formatter", [])
+        BACKEND_PREFERENCES["formatter"] = ["gemini-pro", "gemini-flash", "openai", "openai-mini"]  # Try Gemini Pro first
+    else:
+        original_prefs = None
+
     formatter_prompt_template = load_agent_prompt("formatter")
     formatter_system = "You are a professional transcript formatter applying AP Style guidelines. Output raw Markdown only. Do NOT use code blocks (```). Do NOT add conversational text."
     formatter_user = f"{formatter_prompt_template}\n\n# TRANSCRIPT TO FORMAT\n\n{transcript}"
 
-    formatter_output, backend_used, metrics = run_with_fallback("formatter", formatter_user, formatter_system, llm)
+    try:
+        formatter_output, backend_used, metrics = run_with_fallback("formatter", formatter_user, formatter_system, llm)
+    finally:
+        # Restore original preferences if we changed them
+        if original_prefs is not None:
+            BACKEND_PREFERENCES["formatter"] = original_prefs
     formatted_transcript, timestamp_report = extract_formatted_transcript_and_timestamps(formatter_output)
 
     output_dir = OUTPUT_DIR / project_name

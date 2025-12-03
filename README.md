@@ -12,6 +12,28 @@ This is a **prompt engineering project**, not a software application. The core a
 - Create formatted transcripts and timestamp chapters
 - Follow program-specific editorial guidelines
 
+## Setup
+
+### First-Time Setup
+
+If you plan to use the visual dashboard, set up the Python virtual environment:
+
+```bash
+# Navigate to the project directory
+cd editorial-assistant
+
+# Create virtual environment (if not already created)
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Install required packages
+pip install rich anthropic openai
+```
+
+**Note:** The visual dashboard requires the `rich` library. The basic workflow (using Claude.ai web interface) does not require any setup.
+
 ## How to Use
 
 ### Quick Start (2 minutes)
@@ -30,6 +52,37 @@ This is a **prompt engineering project**, not a software application. The core a
 **Phase 3 - Analysis**: Keyword research and competitive analysis (when needed)
 **Phase 4 - Finalization**: Formatted transcripts and timestamp chapters (on request)
 
+## Visual Dashboard
+
+For automated batch processing with real-time monitoring, use the visual dashboard:
+
+```bash
+# Activate the virtual environment first
+source venv/bin/activate
+
+# Launch the visual dashboard
+python3 scripts/process_queue_visual.py
+```
+
+**Prerequisites:** The dashboard requires the `rich` library for terminal UI. Ensure you've activated the virtual environment before running.
+
+The dashboard provides:
+- **Real-time progress tracking** with rich terminal UI
+- **Cost visualization** including sparkline charts and cost-per-project metrics
+- **Session statistics** tracking projects processed, success/failure rates, and processing speed
+- **Backend distribution** showing API usage across different LLM providers
+- **Live activity logs** with recent processing events
+- **Queue management** view showing pending and active projects
+
+**Key features:**
+- Session cost tracking with per-minute and per-hour estimates
+- ASCII sparkline charts showing cost timeline (last 60 minutes)
+- Backend usage breakdown (call counts, costs, percentages)
+- Processing rate metrics (projects per minute)
+- Error tracking and display
+
+**Alternative (headless):** For automation or scripting, use `python3 scripts/process_queue_auto.py`
+
 ## Repository Structure
 
 ```
@@ -40,6 +93,13 @@ editorial-assistant/
 │   ├── Transcript Style Guide.pdf
 │   ├── WPM Generative AI Guidelines.pdf
 │   └── Media ID Prefixes.md
+├── scripts/                       # Processing automation
+│   ├── dashboard/                 # Visual dashboard components
+│   │   ├── cost_visualizer.py    # Cost tracking & sparkline charts
+│   │   ├── session_manager.py    # Session persistence & stats
+│   │   └── ui_components.py      # Rich UI panels
+│   ├── process_queue_visual.py   # Visual dashboard launcher
+│   └── process_queue_auto.py     # Headless batch processor
 ├── transcripts/                   # Your video transcripts
 │   ├── *.txt                      # Active transcripts
 │   └── archive/                   # Completed transcripts

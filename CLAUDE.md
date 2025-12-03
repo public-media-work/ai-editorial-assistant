@@ -24,6 +24,7 @@ python3 scripts/process_queue_auto.py
 - `/prioritize-transcript <name>` - Move transcript to front of queue
 - `/archive-old-projects` - Archive output folders older than 30 days
 - `/clean-dev-docs` - Audit and archive stale development documentation
+- `/check-pricing` - Verify LLM pricing and re-evaluate model priority (run monthly)
 
 ## Architecture
 

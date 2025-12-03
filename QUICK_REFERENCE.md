@@ -4,6 +4,15 @@ Fast lookup for common tasks in the editorial assistant workflow.
 
 ---
 
+## Quick Commands
+
+**Launch Visual Dashboard (single command):**
+```bash
+source venv/bin/activate && python3 scripts/process_queue_visual.py
+```
+
+---
+
 ## Daily Workflow
 
 ### 1. Add New Transcripts
@@ -16,7 +25,25 @@ cp /path/to/transcripts/*.txt ~/Developer/editorial-assistant/transcripts/
 tail -f logs/watcher.log
 ```
 
-### 2. Process Queue (in Claude Code)
+### 2. Process Queue
+
+**Option A: Visual Dashboard (Recommended)**
+```bash
+# Activate virtual environment first
+source venv/bin/activate
+
+# Launch dashboard
+python3 scripts/process_queue_visual.py
+```
+Real-time monitoring with cost tracking, session stats, and live progress.
+**Requires:** Virtual environment activated (for `rich` library).
+
+**Option B: Headless (for automation)**
+```bash
+python3 scripts/process_queue_auto.py
+```
+
+**Option C: Claude Code (interactive)**
 ```
 "Process all items in .processing-requests.json"
 ```
@@ -30,6 +57,43 @@ tail -f logs/watcher.log
 ```
 "What's ready for editing?"
 ```
+
+---
+
+## Visual Dashboard Features
+
+Launch with:
+```bash
+source venv/bin/activate  # Required: Activates virtual environment
+python3 scripts/process_queue_visual.py
+```
+
+### Real-Time Monitoring
+- **Session Statistics Panel**: Duration, projects processed/failed, processing rate (per minute)
+- **Cost Tracking Panel**: Current session cost, average per project, estimated hourly rate
+- **Cost Timeline Sparkline**: ASCII chart showing cost distribution over last 60 minutes
+- **Backend Distribution**: Bar chart of API usage (calls, costs, percentages by provider)
+- **Recent Errors Panel**: Last 3 errors with timestamps and details
+- **Queue View**: Pending and active projects with status indicators
+
+### Cost Visualization
+```
+$0.50 ┤                ╭─╮
+$0.40 ┤                │ │
+$0.30 ┤        ╭─╮     │ │
+$0.20 ┤    ╭─╮ │ │ ╭─╮ │ │
+$0.10 ┤ ╭─╮│ │ │ │ │ │ │ │
+      └─────────────────────
+```
+- Per-minute and per-hour cost estimates
+- Project-by-project cost tracking
+- 60-minute rolling timeline with sparkline charts
+
+### Session Persistence
+Dashboard sessions are automatically saved to `.dashboard_session.json`:
+- Resume session after restart
+- View historical cost data
+- Track backend usage patterns
 
 ---
 
@@ -120,6 +184,14 @@ logs/watcher.error.log    ← Watcher errors
 ---
 
 ## Scripts Reference
+
+### Queue Processing
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `process_queue_visual.py` | Visual dashboard with real-time monitoring | `source venv/bin/activate && python3 scripts/process_queue_visual.py` |
+| `process_queue_auto.py` | Headless batch processor | `python3 scripts/process_queue_auto.py` |
+
+**Note:** Visual dashboard requires virtual environment for the `rich` library. Headless processor doesn't require venv.
 
 ### Automation
 | Script | Purpose | Usage |
@@ -336,9 +408,19 @@ ls -lh transcripts/archive/ | tail -20
 
 **Normal day**:
 1. Drop files → auto-detected
-2. Process queue → agents run
-3. Finalize → auto-archived
-4. Edit → Claude Desktop
+2. **Launch visual dashboard**:
+   ```bash
+   source venv/bin/activate
+   python3 scripts/process_queue_visual.py
+   ```
+3. Process queue → agents run with real-time monitoring
+4. Finalize → auto-archived
+5. Edit → Claude Desktop
+
+**Quick launch command** (for easy reference):
+```bash
+source venv/bin/activate && python3 scripts/process_queue_visual.py
+```
 
 **Weekly check**:
 ```bash
