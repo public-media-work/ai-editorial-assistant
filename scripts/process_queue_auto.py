@@ -6,6 +6,8 @@ Runs agents on all queued projects using configured LLM backend
 
 import json
 import sys
+import time
+import re
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -27,6 +29,20 @@ LOG_DIR = PROJECT_ROOT / "logs"
 QUEUE_LOCK = Lock()
 MANIFEST_LOCK = Lock()
 
+
+def prefixed(project_name: str, basename: str) -> str:
+    """Return deliverable filename prefixed with project id."""
+    return f"{project_name}_{basename}"
+
+
+def strip_code_fences(content: str) -> str:
+    """Remove triple-backtick code fences while preserving inner content."""
+    cleaned = CODE_FENCE_PATTERN.sub(r"\1\n", content)
+    # Strip any stray standalone fences
+    cleaned = cleaned.replace("```", "")
+    return cleaned.strip() + "\n"
+
+
 # Optional per-agent backend preferences; falls back to llm-config auto_select order
 # analyst: Use cheap model for brainstorming
 # formatter: Prefer Gemini Flash (1M context, fast, cheap) for formatting large transcripts
@@ -39,6 +55,12 @@ BACKEND_PREFERENCES = {
 # Based on observed data: 60K+ token transcripts = ~240K+ characters
 # Setting threshold at 200K chars to catch large transcripts before they timeout
 FORMATTER_LARGE_TRANSCRIPT_THRESHOLD = 200000
+
+# Transcript length threshold to favor a more capable model for timestamp accuracy
+# Captures medium/long transcripts that benefit from better alignment without waiting for the large-doc upgrade
+TIMESTAMP_ACCURACY_THRESHOLD = 120000
+
+CODE_FENCE_PATTERN = re.compile(r"```[a-zA-Z0-9_+-]*\s*\n(.*?)\n```", re.DOTALL)
 
 
 def load_queue():
@@ -142,9 +164,14 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
             "agent": agent
         }
 
-        # Add metrics if provided
+        # Add metrics if provided (includes model, backend, costs, tokens)
         if metrics:
             deliverable_entry["metrics"] = metrics
+            # Also add top-level model/backend for quick reference
+            if "model" in metrics:
+                deliverable_entry["model"] = metrics["model"]
+            if "backend" in metrics:
+                deliverable_entry["backend"] = metrics["backend"]
 
         manifest["deliverables"][deliverable_type] = deliverable_entry
 
@@ -156,17 +183,40 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
             manifest["status"] = "ready_for_editing"
             manifest["processing_completed"] = datetime.utcnow().isoformat() + "Z"
 
-            # Calculate total project cost
+            # Calculate total project cost and per-model breakdown
             total_cost = 0.0
             total_tokens = 0
+            model_costs = {}  # Track cost per model
             for deliverable in manifest["deliverables"].values():
+                # Skip null/placeholder entries
+                if not isinstance(deliverable, dict):
+                    continue
                 if "metrics" in deliverable:
-                    total_cost += deliverable["metrics"].get("estimated_cost", 0.0)
-                    total_tokens += deliverable["metrics"].get("total_tokens", 0)
+                    cost = deliverable["metrics"].get("estimated_cost", 0.0)
+                    tokens = deliverable["metrics"].get("total_tokens", 0)
+                    model = deliverable["metrics"].get("model", "unknown")
+
+                    total_cost += cost
+                    total_tokens += tokens
+
+                    # Accumulate per-model costs
+                    if model not in model_costs:
+                        model_costs[model] = {"cost": 0.0, "tokens": 0, "calls": 0}
+                    model_costs[model]["cost"] += cost
+                    model_costs[model]["tokens"] += tokens
+                    model_costs[model]["calls"] += 1
 
             manifest["processing_metrics"] = {
                 "total_estimated_cost": round(total_cost, 4),
-                "total_tokens": total_tokens
+                "total_tokens": total_tokens,
+                "model_breakdown": {
+                    model: {
+                        "cost": round(stats["cost"], 4),
+                        "tokens": stats["tokens"],
+                        "calls": stats["calls"]
+                    }
+                    for model, stats in model_costs.items()
+                }
             }
 
         # Save manifest
@@ -266,15 +316,17 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, verbo
     analyst_system = "You are a professional video content analyst. Generate the brainstorming document in Markdown format exactly as specified. Do NOT output JSON. Do NOT wrap output in code blocks."
     analyst_user = f"{analyst_prompt_template}\n\n# TRANSCRIPT TO ANALYZE\n\n{transcript}"
 
-    brainstorming, backend_used, metrics = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    brainstorming_raw, backend_used, metrics = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    brainstorming = strip_code_fences(brainstorming_raw)
 
     output_dir = OUTPUT_DIR / project_name
-    brainstorming_path = output_dir / "brainstorming.md"
+    brainstorming_filename = prefixed(project_name, "brainstorming.md")
+    brainstorming_path = output_dir / brainstorming_filename
     with open(brainstorming_path, "w") as f:
         f.write(brainstorming)
 
     if verbose:
-        print(f"  ✓ Saved: brainstorming.md ({len(brainstorming)} chars) via {backend_used}")
+        print(f"  ✓ Saved: {brainstorming_filename} ({len(brainstorming)} chars) via {backend_used}")
         print(f"  ✓ Cost: ${metrics.estimated_cost:.4f} ({metrics.total_tokens} tokens)")
 
     metrics_dict = {
@@ -287,7 +339,7 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, verbo
     }
 
     log_event(project_name, "transcript-analyst", "completed", {"backend": backend_used, "metrics": metrics_dict})
-    return "brainstorming.md", metrics_dict
+    return brainstorming_filename, metrics_dict
 
 
 def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, verbose: bool = True) -> tuple[str, str | None, dict]:
@@ -302,16 +354,25 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
 
     # Check transcript length and dynamically adjust backend preference for large transcripts
     transcript_length = len(transcript)
+    original_prefs = None
+    formatter_override: list[str] | None = None
+
     if transcript_length > FORMATTER_LARGE_TRANSCRIPT_THRESHOLD:
         # Large transcript detected - prefer Gemini Pro (2M context) or gpt-4o for better performance
+        formatter_override = ["gemini-pro", "gemini-flash", "gemini-flash-8b", "openai", "openai-mini"]
         if verbose:
             print(f"  ⚠ Large transcript detected ({transcript_length:,} chars) - upgrading to Gemini Pro (2M context)")
         log_event(project_name, "formatter", "large_transcript_detected", {"length": transcript_length, "upgrade_to": "gemini-pro"})
-        # Temporarily override backend preference for this call
+    elif transcript_length > TIMESTAMP_ACCURACY_THRESHOLD:
+        # Medium/long transcript - prefer more capable model to improve timestamp alignment (Gemini-first)
+        formatter_override = ["gemini-flash", "gemini-flash-8b", "openai", "openai-mini"]
+        if verbose:
+            print(f"  ⚠ Transcript {transcript_length:,} chars - upgrading formatter for better timestamp accuracy (Gemini-first)")
+        log_event(project_name, "formatter", "timestamp_upgrade", {"length": transcript_length, "upgrade_to": "gemini-flash"})
+
+    if formatter_override:
         original_prefs = BACKEND_PREFERENCES.get("formatter", [])
-        BACKEND_PREFERENCES["formatter"] = ["gemini-pro", "gemini-flash", "openai", "openai-mini"]  # Try Gemini Pro first
-    else:
-        original_prefs = None
+        BACKEND_PREFERENCES["formatter"] = formatter_override
 
     formatter_prompt_template = load_agent_prompt("formatter")
     formatter_system = "You are a professional transcript formatter applying AP Style guidelines. Output raw Markdown only. Do NOT use code blocks (```). Do NOT add conversational text."
@@ -323,25 +384,28 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
         # Restore original preferences if we changed them
         if original_prefs is not None:
             BACKEND_PREFERENCES["formatter"] = original_prefs
-    formatted_transcript, timestamp_report = extract_formatted_transcript_and_timestamps(formatter_output)
+    formatted_transcript_raw, timestamp_report_raw = extract_formatted_transcript_and_timestamps(formatter_output)
+    formatted_transcript = strip_code_fences(formatted_transcript_raw)
+    timestamp_report = strip_code_fences(timestamp_report_raw) if timestamp_report_raw else None
 
     output_dir = OUTPUT_DIR / project_name
-    formatted_path = output_dir / "formatted_transcript.md"
+    formatted_filename = prefixed(project_name, "formatted_transcript.md")
+    formatted_path = output_dir / formatted_filename
     with open(formatted_path, "w") as f:
         f.write(formatted_transcript)
 
     if verbose:
-        print(f"  ✓ Saved: formatted_transcript.md ({len(formatted_transcript)} chars) via {backend_used}")
+        print(f"  ✓ Saved: {formatted_filename} ({len(formatted_transcript)} chars) via {backend_used}")
         print(f"  ✓ Cost: ${metrics.estimated_cost:.4f} ({metrics.total_tokens} tokens)")
 
     timestamp_filename = None
     if timestamp_report:
-        timestamp_path = output_dir / "timestamp_report.md"
+        timestamp_filename = prefixed(project_name, "timestamp_report.md")
+        timestamp_path = output_dir / timestamp_filename
         with open(timestamp_path, "w") as f:
             f.write(timestamp_report)
-        timestamp_filename = "timestamp_report.md"
         if verbose:
-            print(f"  ✓ Saved: timestamp_report.md ({len(timestamp_report)} chars)")
+            print(f"  ✓ Saved: {timestamp_filename} ({len(timestamp_report)} chars)")
 
     metrics_dict = {
         "input_tokens": metrics.input_tokens,
@@ -358,7 +422,39 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
         "completed",
         {"backend": backend_used, "timestamps_created": bool(timestamp_filename), "metrics": metrics_dict}
     )
-    return "formatted_transcript.md", timestamp_filename, metrics_dict
+    return formatted_filename, timestamp_filename, metrics_dict
+
+
+def archive_transcript(project_name: str, transcript_file: str | None = None, verbose: bool = True):
+    """Archive the transcript file for a processed project"""
+    archive_dir = TRANSCRIPTS_DIR / "archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find the transcript file to archive
+    candidates = _candidate_transcript_paths(project_name, transcript_file)
+
+    for transcript_path in candidates:
+        if transcript_path.exists() and transcript_path.parent == TRANSCRIPTS_DIR:
+            # Only archive if it's in the main transcripts directory (not already archived)
+            dest_path = archive_dir / transcript_path.name
+
+            if dest_path.exists():
+                if verbose:
+                    print(f"  ⚠ Transcript already archived: {transcript_path.name}")
+                return
+
+            try:
+                transcript_path.rename(dest_path)
+                if verbose:
+                    print(f"  ✓ Archived transcript: {transcript_path.name}")
+                return
+            except Exception as e:
+                if verbose:
+                    print(f"  ⚠ Failed to archive transcript: {e}")
+                return
+
+    if verbose:
+        print(f"  ⚠ No unarchived transcript found for {project_name}")
 
 
 def process_project(project_name: str, llm: LLMBackend, verbose: bool = True, transcript_file: str | None = None):
@@ -404,6 +500,11 @@ def process_project(project_name: str, llm: LLMBackend, verbose: bool = True, tr
         print(f"{'='*60}")
     log_event(project_name, "project", "completed", {"total_cost": total_cost, "total_tokens": total_tokens})
 
+    # Archive transcript immediately after successful processing
+    if verbose:
+        print(f"\n→ Archiving transcript...")
+    archive_transcript(project_name, transcript_file, verbose)
+
     return True
 
 
@@ -426,6 +527,83 @@ def calculate_estimated_time(transcript_length: int) -> float:
         return 0.0
     # Minimum 1 minute for any processing
     return max(1.0, round(transcript_length / CHARS_PER_MINUTE_PROCESSING, 2))
+
+
+def archive_old_output_folders(max_age_days: int = 15, verbose: bool = True):
+    """Archive output project folders older than max_age_days
+
+    Args:
+        max_age_days: Maximum age in days before archiving (default: 15)
+        verbose: Print status messages
+
+    Returns:
+        Number of folders archived
+    """
+    archive_dir = OUTPUT_DIR / "archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    archived_count = 0
+    now = datetime.utcnow()
+
+    if verbose:
+        print(f"\n→ Checking for output folders older than {max_age_days} days...")
+
+    # Scan all project directories in OUTPUT
+    for project_dir in OUTPUT_DIR.iterdir():
+        # Skip if not a directory, or if it's the archive directory itself
+        if not project_dir.is_dir() or project_dir.name == "archive" or project_dir.name.startswith("."):
+            continue
+
+        manifest_path = project_dir / "manifest.json"
+
+        # Skip if no manifest
+        if not manifest_path.exists():
+            continue
+
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+
+            # Get completion date from manifest
+            completed_date_str = manifest.get("processing_completed")
+            if not completed_date_str:
+                # Fall back to processing_started if no completion date
+                completed_date_str = manifest.get("processing_started")
+
+            if not completed_date_str:
+                continue
+
+            # Parse date (ISO format)
+            completed_date = datetime.fromisoformat(completed_date_str.replace("Z", "+00:00"))
+
+            # Calculate age in days
+            age = (now - completed_date).days
+
+            if age >= max_age_days:
+                dest_path = archive_dir / project_dir.name
+
+                # Skip if already exists in archive
+                if dest_path.exists():
+                    continue
+
+                # Move to archive
+                project_dir.rename(dest_path)
+                archived_count += 1
+
+                if verbose:
+                    print(f"  ✓ Archived {project_dir.name} ({age} days old)")
+
+        except Exception as e:
+            if verbose:
+                print(f"  ⚠ Error archiving {project_dir.name}: {e}")
+
+    if verbose:
+        if archived_count > 0:
+            print(f"\n✓ Archived {archived_count} output folder(s)")
+        else:
+            print(f"\n✓ No output folders older than {max_age_days} days")
+
+    return archived_count
 
 
 def main():

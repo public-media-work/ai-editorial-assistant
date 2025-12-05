@@ -158,6 +158,41 @@ def make_stats_panel(state: "DashboardState", session: "SessionManager") -> "Pan
         table.add_row("")
         table.add_row(Text("Backend Distribution: None yet", style="dim"))
 
+    # Row 6: Model distribution (per-model cost breakdown)
+    model_usage = stats.get("model_usage", {})
+    if model_usage:
+        table.add_row("")
+        table.add_row(Text("Model Distribution:", style="magenta bold"))
+
+        # Sort by cost (descending) to show most expensive models first
+        sorted_models = sorted(
+            model_usage.items(),
+            key=lambda x: x[1].get("cost", 0.0),
+            reverse=True,
+        )
+
+        # Calculate total cost for percentage
+        total_model_cost = sum(m[1].get("cost", 0.0) for m in sorted_models)
+
+        for model_name, usage in sorted_models:
+            calls = usage.get("calls", 0)
+            cost = usage.get("cost", 0.0)
+
+            # Calculate percentage
+            percentage = (cost / total_model_cost * 100) if total_model_cost > 0 else 0.0
+
+            # Create bar (10 chars = 100%, scale proportionally)
+            bar_length = max(1, int((cost / total_model_cost * 10))) if total_model_cost > 0 else 1
+            bar = "■" * bar_length
+
+            model_text = Text()
+            model_text.append(bar, style="magenta bold")
+            model_text.append(f" {model_name:<25} {calls:>3} calls ", style="white")
+            model_text.append(format_currency(cost), style="bold green")
+            model_text.append(f" ({percentage:>5.1f}%)", style="dim white")
+
+            table.add_row(model_text)
+
     # Create the panel
     return Panel(
         table,

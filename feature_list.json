@@ -1,0 +1,97 @@
+{
+  "features": [
+    {
+      "id": "F001",
+      "name": "Readable brainstorming exports",
+      "description": "Ensure brainstorming deliverables stay plain Markdown with no stray markup so they can be read directly without the agent.",
+      "status": "completed",
+      "passes": true,
+      "related_docs": [
+        "USER_FEEDBACK.md"
+      ]
+    },
+    {
+      "id": "F002",
+      "name": "Clean formatted transcript output",
+      "description": "Remove odd code fences/markup from formatted transcript templates and outputs.",
+      "status": "completed",
+      "passes": true,
+      "related_docs": [
+        "USER_FEEDBACK.md"
+      ]
+    },
+    {
+      "id": "F003",
+      "name": "Deliverable filename conventions + renamer",
+      "description": "Append deliverables with the raw transcript id and ship a script to rename existing files across projects (e.g., 2BUC0000HDWEB02_formatted_transcript.md).",
+      "status": "completed",
+      "passes": true,
+      "related_docs": [
+        "USER_FEEDBACK.md"
+      ]
+    },
+    {
+      "id": "F004",
+      "name": "Archive protocol automation",
+      "description": "Archive raw transcripts immediately after processing; archive output folders after 15 days; add a daily archive check to the watch script startup. All requirements complete: transcript archival on processing, startup checks in visualizer, configurable age threshold.",
+      "status": "completed",
+      "passes": true,
+      "related_docs": [
+        "USER_FEEDBACK.md",
+        "scripts/process_queue_auto.py",
+        "scripts/process_queue_visual.py"
+      ]
+    },
+    {
+      "id": "F005",
+      "name": "Chat agent revision loop",
+      "description": "Enforce the expected chat workflow: ingest user drafts (including screenshots), suggest relevant transcripts, produce Markdown revision reports, loop until approval, and trigger keyword/implementation reports when SEMRush data arrives.",
+      "status": "pending",
+      "passes": false,
+      "related_docs": [
+        "USER_FEEDBACK.md",
+        "CLAUDE_CHAT_SETUP.md"
+      ]
+    },
+    {
+      "id": "F006",
+      "name": "Visualizer controls + roadmap alignment",
+      "description": "Fix non-functional dashboard buttons and prioritize the roadmap from FUTURE_ENHANCEMENTS_VISUAL_DASHBOARD.md with the overhaul plan. Phase 1 (SQLite database backend) completed.",
+      "status": "completed",
+      "passes": true,
+      "related_docs": [
+        "FUTURE_ENHANCEMENTS_VISUAL_DASHBOARD.md",
+        "DASHBOARD_OVERHAUL_ROADMAP.md",
+        "USER_FEEDBACK.md",
+        "config/dashboard_schema.sql",
+        "scripts/orchestrator.py",
+        "scripts/migrate_queue.py"
+      ]
+    },
+    {
+      "id": "F007",
+      "name": "Per-model attribution and cost display",
+      "description": "Sign output files with the agent/model used and expose per-model cost breakdowns in the dashboard visualizer. Complete: manifests track agent/model/backend per deliverable, session manager tracks per-model costs, visualizer displays Model Distribution panel.",
+      "status": "completed",
+      "passes": true,
+      "related_docs": [
+        "COST_TRACKING.md",
+        "USER_FEEDBACK.md",
+        "scripts/dashboard/ui_components.py",
+        "scripts/dashboard/session_manager.py",
+        "scripts/process_queue_visual.py"
+      ]
+    },
+    {
+      "id": "F008",
+      "name": "Fix 'unknown program' visualizer regression",
+      "description": "Investigate and fix the regression where the visualizer displays all program names as 'unknown program'. Investigation complete: program_type field is correctly populated in all manifests and get_program_name() function works correctly.",
+      "status": "completed",
+      "passes": true,
+      "related_docs": [
+        "USER_FEEDBACK.md",
+        "scripts/process_queue_visual.py"
+      ]
+    }
+  ]
+}

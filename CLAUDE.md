@@ -95,6 +95,14 @@ Run `/clean-dev-docs` periodically to audit and archive stale documentation:
 3. Review candidates before archiving
 4. Archived files go to `docs/archive/` (preserved in git history)
 
+## Long-Running Harness (Initializer + Coding Agent)
+
+- Start every session with `./init.sh`, then read `claude-progress.txt` and `feature_list.json` to select a single feature (`pending` → `in_progress`).
+- Initializer agent: ensure context is loaded (this file + DEV_LONG_RUNNING_AGENT_PLAN.md), refresh the queue, and set the next feature.
+- Coding agent: work one feature end-to-end, verify results/tests, update `feature_list.json` and `claude-progress.txt`, and keep the tree clean with an attributed commit.
+- Never mark `passes: true` without verification; do not remove features; prefer small, plan-first changes.
+- New feedback belongs in `USER_FEEDBACK.md` (intake) and then in `feature_list.json` (queue).
+
 ## Directory Conventions
 
 ### Folders with Gitignored Contents

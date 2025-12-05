@@ -1,7 +1,17 @@
 
-- I'd appreciate if the Brainstorming files could be human-readable Markdown files, since I occasionally just reference those directly without using the chat agent. 
-- The formatted transcript files include some weird codeblock markup that I'd like removed. 
-- To avoid confusion in search, let's append all the deliverables with the filename of the original raw transcript file. So the formatted transcript for 2BUC0000HDWEB02 would be 2BUC0000HDWEB02_formatted_transcript. Please write a script to rename all the files in every project accordingly. 
-- What's our archive protocol again? I think we should archive raw transcripts as soon as they are processed, and output folders should be archived after 15 days. Let's run a quick archive check every time the watch script starts up, which theoretically will be once a day. 
-- I am still really struggling with getting the chat agent to follow the workflow I expect. I need it to be crystal clear that the chat agent needs to receive user input of draft copy (often in the form of a screenshot from AirTable), suggest recent transcripts and any transcripts that seem to match the draft copy, produce a revision report STRICTLY as a markdown artifact with the conversation focused on explaining the reasoning behind different tweaks and edits, and to keep going in the loop of user input -> further revision report -> user input -> further revision report until the user is satisfied with the final copy. If the user provides data from SEMRush, that should trigger a keyword report, an implementation report, and a new revision report that accounts for any adjustments based on the new data. 
-- buttons on the visualizer don't seem to do anything. Thinking we should prioritize thinking through a development roadmap for the notes in /Users/mriechers/Developer/editorial-assistant/FUTURE_ENHANCEMENTS_VISUAL_DASHBOARD.md since this current version is kind of only a proof of concept at this point. 
+# User Feedback Log
+
+Status: `[ ]` new/untriaged, `[~]` in progress, `[x]` integrated into the roadmap (`feature_list.json`).
+
+## Checklist
+- [x] Brainstorming deliverables should stay human-readable Markdown without odd markup. (Tracked as F001)
+- [x] Remove weird codeblock markup from formatted transcripts. (Tracked as F002)
+- [x] Append deliverables with the raw transcript filename and ship a renamer script (e.g., `2BUC0000HDWEB02_formatted_transcript`). (Tracked as F003)
+- [x] Archive raw transcripts after processing; archive output folders after 15 days; run archive check at watch-script startup. (Tracked as F004)
+- [x] Chat agent must follow the revision loop: accept draft copy (including screenshots), suggest recent/matching transcripts, emit Markdown-only revision reports with reasoning, loop until approval, and trigger keyword/implementation reports when SEMRush data is provided. (Tracked as F005)
+- [x] Visualizer buttons are non-functional; prioritize roadmap work from `FUTURE_ENHANCEMENTS_VISUAL_DASHBOARD.md` since current version is a proof of concept. (Tracked as F006)
+- [x] Attribute outputs by model/agent and show per-model cost breakdowns in the visualizer. (Tracked as F007)
+
+## How to add new feedback
+- Append new items under this section with `[ ]` so they can be pulled into `feature_list.json` during the next planning pass.
+- [x] uh-oh, we broke the visualizer when it comes to the names of programs, everything is coming up as "unknown program" now. (Tracked as F008)

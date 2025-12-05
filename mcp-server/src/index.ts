@@ -68,6 +68,31 @@ function isPathAllowed(targetPath: string) {
   return allowedRoots.some(root => resolved === root || resolved.startsWith(root + path.sep));
 }
 
+function dedupe(names: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of names) {
+    if (!name) continue;
+    if (!seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+async function findExistingFile(projectPath: string, candidates: Array<string | null | undefined>): Promise<string | null> {
+  for (const candidate of dedupe(candidates)) {
+    try {
+      await fs.access(path.join(projectPath, candidate));
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 async function getFilePreview(filePath: string) {
   const resolved = path.resolve(filePath);
   const stats = await fs.stat(resolved);
@@ -148,23 +173,38 @@ async function scanProjectDirectory(projectPath: string): Promise<ProcessedProje
       // No manifest, scan directory manually
     }
 
-    // Scan files in directory
-    const files = await fs.readdir(projectPath);
+    // Resolve deliverable filenames (prefer manifest entries, fallback to common names)
+    const brainstormingFile = await findExistingFile(projectPath, [
+      manifest?.deliverables?.brainstorming?.file,
+      "brainstorming.md",
+      `${projectName}_brainstorming.md`,
+      "digital_shorts_report.md",
+      `${projectName}_digital_shorts_report.md`
+    ]);
 
-    const hasBrainstorming = files.some(f =>
-      f === "brainstorming.md" || f === "digital_shorts_report.md"
-    );
-    const hasFormattedTranscript = files.includes("formatted_transcript.md");
-    const hasTimestamps = files.includes("timestamp_report.md");
-    const hasRevisions = files.some(f => f.startsWith("copy_revision"));
+    const formattedFile = await findExistingFile(projectPath, [
+      manifest?.deliverables?.formatted_transcript?.file,
+      "formatted_transcript.md",
+      `${projectName}_formatted_transcript.md`
+    ]);
+
+    const timestampFile = await findExistingFile(projectPath, [
+      manifest?.deliverables?.timestamps?.file,
+      "timestamp_report.md",
+      `${projectName}_timestamp_report.md`
+    ]);
+
+    // Scan files in directory for revisions/metadata
+    const files = await fs.readdir(projectPath);
+    const hasRevisions = files.some(f => f.includes("copy_revision"));
 
     // Determine status
     let status = "unknown";
     if (manifest?.status) {
       status = manifest.status;
-    } else if (hasBrainstorming && hasFormattedTranscript) {
+    } else if (brainstormingFile && formattedFile) {
       status = "ready_for_editing";
-    } else if (hasBrainstorming) {
+    } else if (brainstormingFile) {
       status = "processing";
     }
 
@@ -172,9 +212,9 @@ async function scanProjectDirectory(projectPath: string): Promise<ProcessedProje
       name: projectName,
       program: manifest?.program_type || "Unknown",
       processed_date: manifest?.processing_started?.split("T")[0] || "Unknown",
-      has_brainstorming: hasBrainstorming,
-      has_formatted_transcript: hasFormattedTranscript,
-      has_timestamps: hasTimestamps,
+      has_brainstorming: Boolean(brainstormingFile),
+      has_formatted_transcript: Boolean(formattedFile),
+      has_timestamps: Boolean(timestampFile),
       has_revisions: hasRevisions,
       status,
       transcript_summary: manifest?.content_summary,
@@ -237,22 +277,36 @@ async function loadProjectForEditing(projectName: string): Promise<any> {
       }
     }
 
+    const brainstormingFile = await findExistingFile(projectPath, [
+      manifest?.deliverables?.brainstorming?.file,
+      "brainstorming.md",
+      `${projectName}_brainstorming.md`,
+      "digital_shorts_report.md",
+      `${projectName}_digital_shorts_report.md`
+    ]);
+
     let brainstormingPreview = null;
-    const brainstormingPaths = ["brainstorming.md", "digital_shorts_report.md"];
-    for (const candidate of brainstormingPaths) {
+    if (brainstormingFile) {
       try {
-        brainstormingPreview = await getFilePreview(path.join(projectPath, candidate));
-        break;
+        brainstormingPreview = await getFilePreview(path.join(projectPath, brainstormingFile));
       } catch {
-        // keep looking
+        brainstormingPreview = null;
       }
     }
 
+    const formattedFile = await findExistingFile(projectPath, [
+      manifest?.deliverables?.formatted_transcript?.file,
+      "formatted_transcript.md",
+      `${projectName}_formatted_transcript.md`
+    ]);
+
     let formattedPreview = null;
-    try {
-      formattedPreview = await getFilePreview(path.join(projectPath, "formatted_transcript.md"));
-    } catch {
-      // none
+    if (formattedFile) {
+      try {
+        formattedPreview = await getFilePreview(path.join(projectPath, formattedFile));
+      } catch {
+        formattedPreview = null;
+      }
     }
 
     // Load most recent revision preview if exists
@@ -260,7 +314,7 @@ async function loadProjectForEditing(projectName: string): Promise<any> {
     try {
       const files = await fs.readdir(projectPath);
       const revisionFiles = files
-        .filter(f => f.startsWith("copy_revision"))
+        .filter(f => f.includes("copy_revision"))
         .sort()
         .reverse();
 
@@ -1080,10 +1134,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error("project_name parameter is required");
       }
       const projectPath = path.join(OUTPUT_DIR, args.project_name);
-      const formattedTranscriptPath = path.join(projectPath, "formatted_transcript.md");
+      let manifest: ProjectManifest | null = null;
+      try {
+        const manifestContent = await fs.readFile(path.join(projectPath, "manifest.json"), "utf-8");
+        manifest = JSON.parse(manifestContent);
+      } catch {
+        manifest = null;
+      }
+
+      const formattedFile = await findExistingFile(projectPath, [
+        manifest?.deliverables?.formatted_transcript?.file,
+        "formatted_transcript.md",
+        `${args.project_name}_formatted_transcript.md`
+      ]);
 
       try {
-        const formattedTranscript = await fs.readFile(formattedTranscriptPath, "utf-8");
+        if (!formattedFile) {
+          throw new Error("formatted transcript missing");
+        }
+        const formattedTranscript = await fs.readFile(path.join(projectPath, formattedFile), "utf-8");
         return {
           content: [{
             type: "text",

@@ -55,8 +55,11 @@ ANTHROPIC_PRICING = {
 # Source: https://ai.google.dev/pricing
 GEMINI_PRICING = {
     "gemini-1.5-flash": {"input": 0.075, "output": 0.30},  # Up to 1M context
+    "gemini-1.5-flash-latest": {"input": 0.075, "output": 0.30},
     "gemini-1.5-flash-8b": {"input": 0.0375, "output": 0.15},  # Up to 1M context, cheaper
+    "gemini-1.5-flash-8b-latest": {"input": 0.0375, "output": 0.15},
     "gemini-1.5-pro": {"input": 1.25, "output": 5.00},  # Up to 2M context
+    "gemini-1.5-pro-latest": {"input": 1.25, "output": 5.00},
     "gemini-2.0-flash-exp": {"input": 0.0, "output": 0.0},  # Free experimental (no SLA)
 }
 

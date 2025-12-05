@@ -69,6 +69,7 @@ class SessionManager:
                 "total_cost": 0.0,
                 "total_processing_minutes": 0.0,
                 "backend_usage": {},
+                "model_usage": {},  # Track per-model statistics
             },
             "cost_timeline": [],
             "errors": [],
@@ -256,7 +257,7 @@ class SessionManager:
             self.session_data = self._create_new_session()
             self._save()
 
-    def add_backend_usage(self, backend: str, calls: int = 1, cost: float = 0.0) -> None:
+    def add_backend_usage(self, backend: str, calls: int = 1, cost: float = 0.0, model: str | None = None) -> None:
         """
         Record backend usage statistics.
 
@@ -264,6 +265,7 @@ class SessionManager:
             backend: Name of the backend
             calls: Number of calls to add (default 1)
             cost: Cost to add for this backend
+            model: Optional model name for per-model tracking
         """
         with self.lock:
             backend_usage = self.session_data["stats"]["backend_usage"]
@@ -273,6 +275,31 @@ class SessionManager:
 
             backend_usage[backend]["calls"] += calls
             backend_usage[backend]["cost"] += cost
+
+            # Also track per-model usage if model is provided
+            if model:
+                self.add_model_usage(model, calls, cost)
+
+            self.session_data["last_updated"] = datetime.utcnow().isoformat() + "Z"
+            self._save()
+
+    def add_model_usage(self, model: str, calls: int = 1, cost: float = 0.0) -> None:
+        """
+        Record model usage statistics.
+
+        Args:
+            model: Name of the model
+            calls: Number of calls to add (default 1)
+            cost: Cost to add for this model
+        """
+        with self.lock:
+            model_usage = self.session_data["stats"]["model_usage"]
+
+            if model not in model_usage:
+                model_usage[model] = {"calls": 0, "cost": 0.0}
+
+            model_usage[model]["calls"] += calls
+            model_usage[model]["cost"] += cost
 
             self.session_data["last_updated"] = datetime.utcnow().isoformat() + "Z"
             self._save()

@@ -54,6 +54,11 @@ RESTART_MARKER = OUTPUT_DIR / ".dashboard_restart_marker"
 QUEUE_LOCK = Lock()
 MANIFEST_LOCK = Lock()
 
+
+def prefixed(project_name: str, basename: str) -> str:
+    """Return deliverable filename prefixed with project id."""
+    return f"{project_name}_{basename}"
+
 # --- DASHBOARD STATE ---
 class DashboardState:
     def __init__(self, session_manager: SessionManager):
@@ -168,6 +173,15 @@ BACKEND_PREFERENCES = {
 # Setting threshold at 200K chars to catch large transcripts before they timeout
 FORMATTER_LARGE_TRANSCRIPT_THRESHOLD = 200000
 
+# Strip triple-backtick fences from LLM outputs.
+CODE_FENCE_PATTERN = re.compile(r"```[a-zA-Z0-9_+-]*\s*\n(.*?)\n```", re.DOTALL)
+
+
+def strip_code_fences(content: str) -> str:
+    cleaned = CODE_FENCE_PATTERN.sub(r"\1\n", content)
+    cleaned = cleaned.replace("```", "")
+    return cleaned.strip() + "\n"
+
 # Add helper to load prefixes
 PROGRAM_PREFIXES = {}
 
@@ -217,17 +231,84 @@ def extract_program_from_brainstorming(content: str) -> str | None:
     return None
 
 def get_program_name(project_name):
+    # First, try to read from manifest.json (most reliable)
+    manifest_path = OUTPUT_DIR / project_name / "manifest.json"
+    if manifest_path.exists():
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+                program_type = manifest.get("program_type")
+                if program_type and program_type != "Unknown":
+                    return program_type
+        except Exception:
+            pass  # Fall through to prefix lookup
+
+    # Fallback to prefix lookup
     # Try 4 char prefix first
     prefix = project_name[:4]
     if prefix in PROGRAM_PREFIXES:
         return PROGRAM_PREFIXES[prefix]
-    
+
     # Try 3 char (some might be shorter)
     prefix = project_name[:3]
     if prefix in PROGRAM_PREFIXES:
         return PROGRAM_PREFIXES[prefix]
-        
+
     return "Unknown Program"
+
+def run_startup_archive_checks(console):
+    """Run archive maintenance checks on startup (F004)
+
+    - Archives old output folders (15+ days by default)
+    - Can be configured via environment variable ARCHIVE_AGE_DAYS
+    """
+    import os
+    from datetime import datetime
+
+    # Check if archival is disabled
+    if os.getenv("SKIP_STARTUP_ARCHIVE") == "1":
+        return
+
+    try:
+        # Get configurable archive age (default 15 days)
+        archive_age_days = int(os.getenv("ARCHIVE_AGE_DAYS", "15"))
+
+        console.print(f"[dim]→ Checking for output folders older than {archive_age_days} days...[/]")
+
+        # Count candidates
+        archive_dir = OUTPUT_DIR / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+
+        entries = list(OUTPUT_DIR.iterdir())
+        project_dirs = [e for e in entries if e.is_dir() and e.name not in ["archive", "examples"] and not e.name.startswith(".")]
+
+        candidates = []
+        now = datetime.utcnow()
+
+        for proj_dir in project_dirs:
+            manifest_path = proj_dir / "manifest.json"
+            if not manifest_path.exists():
+                continue
+
+            try:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                    completed_date = manifest.get("processing_completed") or manifest.get("processing_started")
+                    if completed_date:
+                        completed_dt = datetime.fromisoformat(completed_date.replace("Z", "+00:00")).replace(tzinfo=None)
+                        age_days = (now - completed_dt).days
+                        if age_days >= archive_age_days:
+                            candidates.append((proj_dir.name, age_days))
+            except:
+                continue
+
+        if candidates:
+            console.print(f"[yellow]  Found {len(candidates)} project(s) ready for archive (use MCP tools to archive)[/]")
+        else:
+            console.print(f"[dim]  ✓ No old projects found[/]")
+
+    except Exception as e:
+        console.print(f"[dim red]  Warning: Archive check failed: {e}[/]")
 
 def estimate_video_duration(transcript_text: str) -> str:
     """Estimate video duration from the last timestamp in the transcript"""
@@ -430,8 +511,8 @@ def run_with_fallback(agent_key: str, prompt: str, system: str, llm: LLMBackend)
             response, used_backend, metrics = llm.generate(prompt, system, backend_name)
             cost = metrics.estimated_cost
 
-            # Record backend usage in session
-            state.session_manager.add_backend_usage(used_backend, calls=1, cost=cost)
+            # Record backend usage in session (includes per-model tracking)
+            state.session_manager.add_backend_usage(used_backend, calls=1, cost=cost, model=metrics.model)
 
             return response, used_backend, cost
         except Exception as e:
@@ -461,18 +542,20 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend) -> st
     analyst_user = f"{analyst_prompt_template}\n\n# TRANSCRIPT TO ANALYZE\n\n{transcript}"
 
     state.set_progress(80, "Processing LLM response...")
-    brainstorming, backend_used, cost = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    brainstorming_raw, backend_used, cost = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    brainstorming = strip_code_fences(brainstorming_raw)
     state.add_cost(cost)
 
     state.set_progress(100, "Analyst complete")
 
     output_dir = OUTPUT_DIR / project_name
-    with open(output_dir / "brainstorming.md", "w") as f:
+    brainstorming_filename = prefixed(project_name, "brainstorming.md")
+    with open(output_dir / brainstorming_filename, "w") as f:
         f.write(brainstorming)
 
     state.log(f"✓ Analyst complete ({len(brainstorming)} chars)", "INFO")
     log_event(project_name, "transcript-analyst", "completed", {"backend": backend_used})
-    return "brainstorming.md"
+    return brainstorming_filename
 
 def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend) -> tuple[str, str | None]:
     state.set_progress(0, "Starting formatter agent...")
@@ -507,21 +590,24 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend) -> 
             BACKEND_PREFERENCES["formatter"] = original_prefs
 
     state.set_progress(100, "Formatter complete")
-    formatted_transcript, timestamp_report = extract_formatted_transcript_and_timestamps(formatter_output)
+    formatted_transcript_raw, timestamp_report_raw = extract_formatted_transcript_and_timestamps(formatter_output)
+    formatted_transcript = strip_code_fences(formatted_transcript_raw)
+    timestamp_report = strip_code_fences(timestamp_report_raw) if timestamp_report_raw else None
 
     output_dir = OUTPUT_DIR / project_name
-    with open(output_dir / "formatted_transcript.md", "w") as f:
+    formatted_filename = prefixed(project_name, "formatted_transcript.md")
+    with open(output_dir / formatted_filename, "w") as f:
         f.write(formatted_transcript)
 
     timestamp_filename = None
     if timestamp_report:
-        with open(output_dir / "timestamp_report.md", "w") as f:
+        timestamp_filename = prefixed(project_name, "timestamp_report.md")
+        with open(output_dir / timestamp_filename, "w") as f:
             f.write(timestamp_report)
-        timestamp_filename = "timestamp_report.md"
 
     state.log(f"✓ Formatter complete ({len(formatted_transcript)} chars)", "INFO")
     log_event(project_name, "formatter", "completed", {"backend": backend_used, "timestamps_created": bool(timestamp_filename)})
-    return "formatted_transcript.md", timestamp_filename
+    return formatted_filename, timestamp_filename
 
 def skip_current_project(project_name: str):
     """Move project to end of queue."""
@@ -1016,6 +1102,9 @@ def main():
     check_restart_marker(console)
 
     load_prefixes() # Load the knowledge base
+
+    # Run startup archive checks (F004: Archive old projects and transcripts)
+    run_startup_archive_checks(console)
 
     # Initialize session manager
     session_manager = SessionManager(SESSION_FILE)

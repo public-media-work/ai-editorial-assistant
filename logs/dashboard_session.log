@@ -1,0 +1,69 @@
+[20:28:11] [INFO] Checking for new transcripts...
+[20:28:11] [INFO] No new projects found.
+[21:19:46] [INFO] ✓ Analyst complete (2984 chars)
+[21:20:11] [INFO] ✓ Analyst complete (2883 chars)
+[21:20:21] [INFO] ✓ Formatter complete (3851 chars)
+[22:45:56] [INFO] Checking for new transcripts...
+[22:45:56] [INFO] No new projects found.
+[22:45:59] [INFO] Checking for new transcripts...
+[22:45:59] [INFO] No new projects found.
+[10:13:51] [WARN] ⚠ Encoding retry (latin-1) for 9UNP2011HD
+[10:13:51] [WARN] ⚠ Encoding retry (latin-1) for 9UNP2007HD
+[10:13:51] [WARN] ⚠ Encoding retry (latin-1) for 9UNP2011HD
+[10:14:13] [INFO] ✓ Analyst complete (3489 chars)
+[10:16:45] [INFO] ✓ Formatter complete (43205 chars)
+[10:17:02] [INFO] ✓ Analyst complete (2857 chars)
+[10:19:45] [WARN] Retry: openai-mini failed for formatter
+[10:22:06] [INFO] ✓ Formatter complete (51903 chars)
+[10:22:27] [INFO] ✓ Analyst complete (3469 chars)
+[10:25:06] [WARN] Retry: openai-mini failed for formatter
+[10:25:07] [WARN] Retry: openai failed for formatter
+[10:25:07] [WARN] Retry: claude failed for formatter
+[10:25:07] [ERROR] [red]Error: All backends failed: openai-mini: HTTPSConnectionPool(host='api.openai.com', port=443): Read timed out. (read timeout=180) | openai: OpenAI API error: 429 - {
+    "error": {
+        "message": "Request too large for gpt-4o in organization org-bli45VVjpnXGYK4jdWv073os on tokens per min (TPM): Limit 30000, Requested 31242. The input or output tokens must be reduced in order to run successfully. Visit https://platform.openai.com/account/rate-limits to learn more.",
+        "type": "tokens",
+        "param": null,
+        "code": "rate_limit_exceeded"
+    }
+}
+ | claude: Anthropic API error: 400 - {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-01-01 at 00:00 UTC."},"request_id":"req_011CVk4ig5KPeFugJb84ZQEK"}[/]
+[10:25:28] [INFO] ✓ Analyst complete (3327 chars)
+[10:28:07] [WARN] Retry: openai-mini failed for formatter
+[10:29:33] [WARN] ⚠ Encoding retry (latin-1) for 2BUC2025HDAIRCC
+[10:29:33] [WARN] ⚠ Encoding retry (latin-1) for 2BUC2025HDAIRCC
+[10:29:52] [INFO] ✓ Analyst complete (2864 chars)
+[10:32:33] [WARN] Retry: openai-mini failed for formatter
+[10:32:34] [WARN] Retry: openai failed for formatter
+[10:32:34] [WARN] Retry: claude failed for formatter
+[10:32:34] [ERROR] [red]Error: All backends failed: openai-mini: HTTPSConnectionPool(host='api.openai.com', port=443): Read timed out. (read timeout=180) | openai: OpenAI API error: 429 - {
+    "error": {
+        "message": "Request too large for gpt-4o in organization org-bli45VVjpnXGYK4jdWv073os on tokens per min (TPM): Limit 30000, Requested 36388. The input or output tokens must be reduced in order to run successfully. Visit https://platform.openai.com/account/rate-limits to learn more.",
+        "type": "tokens",
+        "param": null,
+        "code": "rate_limit_exceeded"
+    }
+}
+ | claude: Anthropic API error: 400 - {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-01-01 at 00:00 UTC."},"request_id":"req_011CVk5Hd4udbtKkXmeT5AYZ"}[/]
+[10:32:34] [WARN] ⚠ Encoding retry (latin-1) for 9UNP2007HD
+[10:32:53] [INFO] ✓ Analyst complete (2921 chars)
+[10:35:34] [WARN] Retry: openai-mini failed for formatter
+[10:37:38] [INFO] ✓ Formatter complete (42717 chars)
+[11:11:38] [INFO] ✓ Analyst complete (2874 chars)
+[11:11:43] [INFO] ✓ Formatter complete (3853 chars)
+[11:11:43] [WARN] ⚠ Encoding retry (latin-1) for 2BUC2025HDAIRCC
+[11:12:06] [INFO] ✓ Analyst complete (3232 chars)
+[11:14:41] [INFO] ✓ Formatter complete (35652 chars)
+[11:15:00] [INFO] ✓ Analyst complete (3413 chars)
+[11:17:42] [WARN] Retry: openai-mini failed for formatter
+[11:17:42] [WARN] Retry: openai failed for formatter
+[11:17:42] [WARN] Retry: claude failed for formatter
+[11:17:42] [ERROR] [red]Error: All backends failed: openai-mini: HTTPSConnectionPool(host='api.openai.com', port=443): Read timed out. (read timeout=180) | openai: OpenAI API error: 429 - {
+    "error": {
+        "message": "Request too large for gpt-4o in organization org-bli45VVjpnXGYK4jdWv073os on tokens per min (TPM): Limit 30000, Requested 31242. The input or output tokens must be reduced in order to run successfully. Visit https://platform.openai.com/account/rate-limits to learn more.",
+        "type": "tokens",
+        "param": null,
+        "code": "rate_limit_exceeded"
+    }
+}
+ | claude: Anthropic API error: 400 - {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-01-01 at 00:00 UTC."},"request_id":"req_011CVk8jFHYyxC3WKwBB9kRa"}[/]

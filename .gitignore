@@ -50,4 +50,8 @@ OUTPUT/archive/*
 .env.local
 
 # Logs
-*.log
+
+# Database
+dashboard.db
+
+
