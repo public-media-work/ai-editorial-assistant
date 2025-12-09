@@ -784,8 +784,8 @@ def make_controls_panel():
     text.append("Commands: ", style="dim")
     text.append("[N]", style="bold yellow")
     text.append(" New  ", style="white")
-    text.append("[C]", style="bold yellow")
-    text.append(" Clear  ", style="white")
+    text.append("[C]", style="bold red")
+    text.append(" Clear Completed  ", style="white")
     text.append("[P]", style="bold yellow")
     text.append(" Pause  ", style="white")
     text.append("[S]", style="bold yellow")
@@ -1091,6 +1091,19 @@ def check_restart_marker(console: Console) -> bool:
 
     return False
 
+def sanitize_error(e: Exception) -> str:
+    """Clean up verbose API errors for display."""
+    err_str = str(e)
+    if "429" in err_str:
+        return "Rate Limit Exceeded (429)"
+    if "400" in err_str and ("context" in err_str.lower() or "tokens" in err_str.lower() or "usage" in err_str.lower()):
+        return "Context/Usage Limit (400)"
+    if any(x in err_str for x in ["500", "502", "503", "504"]):
+        return "API Server Error (5xx)"
+    if "Connection" in err_str or "timeout" in err_str.lower():
+        return "Connection Error / Timeout"
+    return err_str[:100] + "..." if len(err_str) > 100 else err_str
+
 # --- MAIN ---
 
 def main():
@@ -1351,8 +1364,9 @@ def main():
                     })
                     successful += 1
                 except Exception as e:
-                    error_msg = str(e)
-                    state.log(f"[red]Error: {e}[/]", "ERROR")
+                    error_msg = sanitize_error(e)
+                    # Log the full error to the file/persistent log, but show the short one in UI
+                    state.log(f"[red]Error: {error_msg}[/]", "ERROR")
 
                     # Calculate duration in minutes (even for failures)
                     duration_minutes = 0.0

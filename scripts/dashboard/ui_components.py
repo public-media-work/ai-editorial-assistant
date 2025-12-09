@@ -62,7 +62,11 @@ def make_stats_panel(state: "DashboardState", session: "SessionManager") -> "Pan
     backend_usage = stats.get("backend_usage", {})
 
     # Calculate processing rate
-    rate = projects_processed / (elapsed / 60) if elapsed > 0 else 0.0
+    if elapsed < 60:
+        rate_str = "Calculating..."
+    else:
+        rate = projects_processed / (elapsed / 60)
+        rate_str = f"{rate:.2f}/min"
 
     # Build the main table for the panel
     table = Table(box=None, expand=True, show_header=False, padding=(0, 1))
@@ -75,7 +79,7 @@ def make_stats_panel(state: "DashboardState", session: "SessionManager") -> "Pan
     summary_text.append(" ✓ ", style="green")
     summary_text.append(str(projects_failed), style="red bold")
     summary_text.append(" ✗", style="red")
-    summary_text.append(f" │ Rate: {rate:.2f}/min", style="white")
+    summary_text.append(f" │ Rate: {rate_str}", style="white")
 
     table.add_row(summary_text)
 

@@ -67,3 +67,4 @@
     }
 }
  | claude: Anthropic API error: 400 - {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-01-01 at 00:00 UTC."},"request_id":"req_011CVk8jFHYyxC3WKwBB9kRa"}[/]
+[21:40:44] [WARN] ⚠ Encoding retry (latin-1) for 6TLB0303
