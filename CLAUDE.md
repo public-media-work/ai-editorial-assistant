@@ -34,10 +34,15 @@ editorial-assistant/
 ├── scripts/             # Python processing scripts
 ├── transcripts/         # Input transcripts (gitignored except examples/)
 ├── OUTPUT/              # Processed project outputs (gitignored except examples/)
+├── agent-instructions/  # Editor agent custom instructions for Claude Desktop
+│   ├── EDITOR_AGENT_INSTRUCTIONS.md  # Full system prompt (paste into project)
+│   └── CLAUDE_DESKTOP_SETUP.md       # MCP connection setup guide
 ├── .claude/
-│   ├── agents/          # Agent instruction files
+│   ├── agents/          # Processing agent system prompts (analyst, formatter, etc.)
 │   ├── commands/        # Slash command definitions
 │   └── templates/       # Output templates
+├── config/              # Configuration files (llm-config.json, etc.)
+├── docs/                # User documentation
 └── docs/archive/        # Archived development documentation
 ```
 
