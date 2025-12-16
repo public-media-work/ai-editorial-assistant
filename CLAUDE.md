@@ -132,3 +132,4 @@ Example files in `transcripts/examples/` and `OUTPUT/examples/` are committed to
 3. **Run cleanup periodically** via `/clean-dev-docs` to keep root clean
 4. **Don't commit actual transcripts or outputs** - only examples
 5. **Rebuild MCP server** after TypeScript changes: `cd mcp-server && npm run build`
+6. **Log agent feedback** - When you encounter issues, limitations, or have improvement suggestions, append them to `AGENT-FEEDBACK.md` following the existing format. This feedback informs future versions of the system.

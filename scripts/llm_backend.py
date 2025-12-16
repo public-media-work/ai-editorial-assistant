@@ -125,7 +125,7 @@ class LLMBackend:
                 print(f"  ✗ {backend_name} unavailable: {e}")
                 return False
 
-        elif backend["type"] in ["openai", "anthropic", "gemini"]:
+        elif backend["type"] in ["openai", "anthropic", "gemini", "openrouter"]:
             # Check if API key exists
             api_key_env = backend.get("api_key_env")
             has_key = api_key_env and os.getenv(api_key_env) is not None
@@ -361,6 +361,80 @@ class LLMBackend:
 
         return content, metrics
 
+    def call_openrouter(self, backend: Dict, prompt: str, system: str) -> tuple[str, UsageMetrics]:
+        """Call OpenRouter API with automatic fallback support"""
+        print(f"    Calling OpenRouter ({backend['model']})...")
+
+        api_key = os.getenv(backend["api_key_env"])
+
+        # Build request with optional fallback models
+        request_body = {
+            "model": backend["model"],
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7
+        }
+
+        # Add fallback models if configured
+        fallback_models = backend.get("fallback_models", [])
+        if fallback_models:
+            request_body["models"] = [backend["model"]] + fallback_models
+
+        response = requests.post(
+            backend["endpoint"],
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/editorial-assistant",
+                "X-Title": "PBS Editorial Assistant"
+            },
+            json=request_body,
+            timeout=backend["timeout"]
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
+
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+
+        # Extract the model that actually responded (may differ if fallback was used)
+        actual_model = data.get("model", backend["model"])
+
+        # Extract usage data
+        usage = data.get("usage", {})
+        input_tokens = usage.get("prompt_tokens", 0)
+        output_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", input_tokens + output_tokens)
+
+        # OpenRouter returns cost in the response (in USD)
+        # Look for it in usage or top-level
+        cost = 0.0
+        if "cost" in usage:
+            cost = float(usage["cost"])
+        elif "total_cost" in data:
+            cost = float(data["total_cost"])
+        else:
+            # Fallback to estimate based on known pricing
+            cost = self.calculate_cost(actual_model, input_tokens, output_tokens)
+
+        metrics = UsageMetrics(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            estimated_cost=cost,
+            model=actual_model,
+            backend="openrouter"
+        )
+
+        if actual_model != backend["model"]:
+            print(f"    (Fallback used: {actual_model})")
+        print(f"    Tokens: {input_tokens} in + {output_tokens} out = {total_tokens} total (${cost:.6f})")
+
+        return content, metrics
+
     def generate(self, prompt: str, system: str,
                  backend_name: Optional[str] = None) -> tuple[str, str, UsageMetrics]:
         """
@@ -385,6 +459,8 @@ class LLMBackend:
             response, metrics = self.call_anthropic(backend, prompt, system)
         elif backend["type"] == "gemini":
             response, metrics = self.call_gemini(backend, prompt, system)
+        elif backend["type"] == "openrouter":
+            response, metrics = self.call_openrouter(backend, prompt, system)
         else:
             raise Exception(f"Unknown backend type: {backend['type']}")
 

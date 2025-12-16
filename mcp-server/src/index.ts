@@ -38,6 +38,7 @@ interface ProjectManifest {
     formatted_transcript?: { file: string; created: string; agent: string };
     timestamps?: { file: string; created: string; agent: string };
     copy_revisions?: Array<{ file: string; version: number; created: string }>;
+    keyword_reports?: Array<{ file: string; version: number; created: string }>;
     seo_data?: { file: string; created: string } | null;
   };
   editing_sessions?: Array<any>;
@@ -400,6 +401,64 @@ async function saveRevision(
     manifest.editing_sessions.push({
       timestamp: new Date().toISOString(),
       action: "revision_saved",
+      version: versionNum
+    });
+
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
+  } catch {
+    // Manifest doesn't exist or couldn't be updated
+  }
+
+  return filePath;
+}
+
+async function saveKeywordReport(
+  projectName: string,
+  content: string,
+  version?: number
+): Promise<string> {
+  const projectPath = path.join(OUTPUT_DIR, projectName);
+
+  // Determine version number
+  let versionNum = version;
+  if (!versionNum) {
+    try {
+      const files = await fs.readdir(projectPath);
+      const reportFiles = files.filter(f => f.startsWith("keyword_report"));
+      versionNum = reportFiles.length + 1;
+    } catch {
+      versionNum = 1;
+    }
+  }
+
+  const filename = `keyword_report_v${versionNum}.md`;
+  const filePath = path.join(projectPath, filename);
+
+  await fs.writeFile(filePath, content, "utf-8");
+
+  // Update manifest if exists
+  try {
+    const manifestPath = path.join(projectPath, "manifest.json");
+    const manifestContent = await fs.readFile(manifestPath, "utf-8");
+    const manifest: ProjectManifest = JSON.parse(manifestContent);
+
+    if (!manifest.deliverables.keyword_reports) {
+      manifest.deliverables.keyword_reports = [];
+    }
+
+    manifest.deliverables.keyword_reports.push({
+      file: filename,
+      version: versionNum,
+      created: new Date().toISOString()
+    });
+
+    if (!manifest.editing_sessions) {
+      manifest.editing_sessions = [];
+    }
+
+    manifest.editing_sessions.push({
+      timestamp: new Date().toISOString(),
+      action: "keyword_report_saved",
       version: versionNum
     });
 
@@ -870,6 +929,28 @@ const tools: Tool[] = [
     }
   },
   {
+    name: "save_keyword_report",
+    description: "Save a keyword/SEO analysis report to the project directory. Auto-increments version numbers. Use this for keyword research outputs, not copy revisions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_name: {
+          type: "string",
+          description: "Name of the project"
+        },
+        content: {
+          type: "string",
+          description: "Markdown content of the keyword report"
+        },
+        version: {
+          type: "number",
+          description: "Optional version number. If not provided, auto-increments."
+        }
+      },
+      required: ["project_name", "content"]
+    }
+  },
+  {
     name: "get_project_summary",
     description: "Get a quick summary of a specific project's status and available deliverables.",
     inputSchema: {
@@ -1111,6 +1192,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         content: [{
           type: "text",
           text: `Revision saved to: ${filePath}`
+        }]
+      };
+    }
+
+    if (name === "save_keyword_report") {
+      if (!args || typeof args.project_name !== "string" || typeof args.content !== "string") {
+        throw new Error("project_name and content parameters are required");
+      }
+      const filePath = await saveKeywordReport(
+        args.project_name,
+        args.content,
+        typeof args.version === "number" ? args.version : undefined
+      );
+      return {
+        content: [{
+          type: "text",
+          text: `Keyword report saved to: ${filePath}`
         }]
       };
     }

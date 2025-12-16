@@ -19,6 +19,61 @@ What changes is *how* we deliver that value:
 
 ---
 
+## Pre-Roadmap Requirement: Feedback Integration
+
+**IMPORTANT**: Before finalizing the roadmap or beginning implementation sprints, all feedback from the following sources MUST be fully reviewed and integrated into this design document:
+
+1. **`USER_FEEDBACK.md`** - User-reported issues, pain points, and feature requests
+2. **`AGENT-FEEDBACK.md`** - AI agent observations from processing sessions, including:
+   - Technical limitations encountered
+   - Process bottlenecks
+   - Integration issues with external services
+   - Recommendations for architectural improvements
+
+### Integration Checklist
+
+- [x] Review all entries in `USER_FEEDBACK.md` - ensure each item is either:
+  - Addressed in the design (reference the section)
+  - Explicitly deferred with rationale
+  - Rejected with explanation
+- [x] Review all entries in `AGENT-FEEDBACK.md` - ensure each item is either:
+  - Incorporated into relevant design sections
+  - Added to the roadmap as a specific task
+  - Noted as a known limitation with mitigation strategy
+- [x] Update "Current Limitations" table with any newly identified gaps
+- [x] Update roadmap phases to include remediation tasks
+- [x] Document any conflicts between user and agent feedback with resolution
+
+**Review completed December 2024.** See "Agent Feedback Integration" section below.
+
+### Agent Feedback Integration (December 2024)
+
+Based on review of `AGENT-FEEDBACK.md`, the following issues have been added to the v3.0 roadmap:
+
+| Issue | Source | Resolution | Phase |
+|-------|--------|------------|-------|
+| **CLI-Agent timeout/chunking** | AGENT-FEEDBACK Issue 1 | Add chunking for large transcripts, timeout params, size warnings | Phase 4 |
+| **SRT speaker normalization** | AGENT-FEEDBACK Issue 2 | Add pre-processing step to normalize speaker markers | Phase 2 |
+| **Stale job recovery** | AGENT-FEEDBACK Issue 3 | Heartbeat mechanism, auto-reset stuck jobs, dead letter queue | Phase 2 |
+| **Partial progress persistence** | AGENT-FEEDBACK Issue 4 | Step-level status tracking, resumable workflows | Phase 2 |
+
+### User Feedback Status (December 2024)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| F001 - Readable brainstorming | ✅ Implemented | `strip_code_fences()`, prompts updated |
+| F002 - Clean transcripts | ✅ Implemented | Prompts forbid code blocks |
+| F003 - Filename convention | ✅ Implemented | `prefixed()` function, renamer script |
+| F004 - Archive protocol | ✅ Implemented | Auto-archive transcripts + 15-day output cleanup |
+| F005 - Chat revision loop | 🔄 Phase 4 | Documented in agent instructions, implementation in Phase 4 |
+| F006 - Visualizer controls | ✅ Phase 1 done | SQLite infrastructure complete, API in Phase 2 |
+| F007 - Per-model costs | ✅ Implemented | Model Distribution panel in visualizer |
+| F008 - Unknown program bug | ✅ Fixed | `get_program_name()` reads from manifest |
+
+This ensures the v3.0 design reflects real-world usage patterns and avoids repeating known issues.
+
+---
+
 ## Part 1: Where We Are (v2.0 Assessment)
 
 ### Current Architecture
@@ -84,10 +139,14 @@ What changes is *how* we deliver that value:
 |-----|------------|---------------|
 | JSON queue is primary state | SQLite exists but not integrated | Full database migration |
 | No external API | Processing tightly coupled to UI | FastAPI control plane |
-| Copy-editor workflow incomplete | No automated revision loop | Chat agent integration |
-| Single-threaded processing | Stability prioritized over speed | Parallel orchestrator |
-| Terminal-only interface | No web layer | React dashboard |
-| No remote monitoring | Requires local terminal access | WebSocket-based updates |
+| Copy-editor workflow incomplete | No automated revision loop | Chat agent integration (Phase 4) |
+| Single-threaded processing | Stability prioritized over speed | Parallel orchestrator + chunk processing (Phase 4) |
+| Terminal-only interface | No web layer | React dashboard (Phase 3) |
+| No remote monitoring | Requires local terminal access | WebSocket-based updates (Phase 2) |
+| **Stale jobs get stuck** | No heartbeat/watchdog | Heartbeat mechanism + auto-reset (Phase 2) |
+| **No partial progress** | All-or-nothing processing | Step-level status tracking (Phase 2) |
+| **Large transcripts hang** | No chunking, CLI-Agent timeout | Transcript chunking + parallel processing (Phase 4) |
+| **Inconsistent speaker markers** | No pre-processing | SRT speaker normalization (Phase 2) |
 
 ---
 
@@ -101,6 +160,7 @@ What changes is *how* we deliver that value:
 4. **Event-Driven**: State changes emit events for real-time updates
 5. **Cost-Aware**: Every decision considers token/dollar tradeoffs
 6. **Parallel by Default**: Work that can be parallelized, should be
+7. **Graceful Degradation**: System works at reduced capability when infrastructure unavailable
 
 ### Target Architecture
 
@@ -455,57 +515,189 @@ model:fallback     {job_id, from_model, to_model, reason}
 
 ## Part 6: Model Router & CLI-Agent Integration
 
-### Cost-Optimized Model Selection
+### Dynamic Model Registry (v3.0 Enhancement)
 
-```python
-# Routing logic (pseudocode)
-def select_model(agent_type: str, transcript_size: int, quality_required: str) -> str:
-    """
-    Decision tree for model selection:
+**Goal:** Enable model switching without code changes - new models or pricing adjustments take effect automatically.
 
-    1. Check CLI-Agent availability (free tier)
-       - gemini CLI → use for analyst, seo-researcher
-       - claude CLI → use for copy-editor (quality)
+#### Data Sources for Model Intelligence
 
-    2. Fall back to direct APIs based on:
-       - transcript_size: small (<50K), medium (<120K), large (<200K), xlarge (>200K)
-       - quality_required: draft, standard, premium
-       - agent_type: analyst (cheap OK), formatter (context needed), copy-editor (quality)
+| Source | URL | Data Provided | Update Frequency | Integration |
+|--------|-----|---------------|------------------|-------------|
+| **OpenRouter API** | openrouter.ai/api/v1/models | Real-time pricing (per-token input/output), context windows, availability, unified API access | Real-time | Primary source; potential routing layer |
+| **Artificial Analysis** | artificialanalysis.ai | Quality benchmarks (MMLU, coding, reasoning), speed benchmarks (tokens/sec), pricing verification, cost-per-quality ratios | Weekly updates | Supplementary for quality scores |
+| **LMSys Chatbot Arena** | chat.lmsys.org | ELO rankings from blind human preference tests, "which model writes better" data | Updated with votes | Reference for creative task quality |
+| **llmprices.dev** | llmprices.dev | Simple pricing aggregator across providers | Frequent | Cross-check pricing |
+| **Provider Docs** | OpenAI, Anthropic, Google | Authoritative specs: max tokens, rate limits, deprecation notices | As announced | Ground truth for technical limits |
 
-    3. Cost hierarchy:
-       CLI agents (free) → gemini-flash-8b → openai-mini → gemini-flash → gpt-4o → claude
-    """
+#### Architecture Options
+
+**Option A: DIY Model Selection**
+- Fetch pricing/capability data from multiple sources
+- Build our own scoring algorithm (cost × quality × speed)
+- Call providers directly (OpenAI, Anthropic, Google APIs)
+- Full control over selection logic
+
+**Option B: OpenRouter as Routing Layer**
+- Single API endpoint for all models
+- OpenRouter handles provider switching and fallbacks
+- Real-time pricing built into their API
+- Less control, but simpler implementation
+
+**Pending Analysis:** Once OpenRouter documentation is fully reviewed, conduct cost/benefit analysis:
+- API cost overhead (OpenRouter markup vs direct)
+- Reliability/uptime comparison
+- Flexibility for custom routing logic
+- Fallback behavior differences
+
+#### Local Override Layer
+
+Regardless of primary source, maintain local config for:
+```json
+{
+  "model_overrides": {
+    "pinned": {
+      "copy-editor": "claude-3-5-sonnet",  // Always use this for quality tasks
+      "analyst": null                       // Use dynamic selection
+    },
+    "blocked": ["gpt-3.5-turbo"],           // Models that don't work well for our use case
+    "cost_adjustments": {}                  // Manual overrides if source data is wrong
+  }
+}
 ```
 
-### CLI-Agent MCP Integration
+### Model Routing Strategy
 
-The `workspace_ops/mcp-servers/cli-agent-server` provides these tools for cost savings:
+**Principle:** Use free-tier CLI tools when available locally, OpenRouter as universal fallback.
 
-| Tool | Use Case | Cost Savings |
-|------|----------|--------------|
-| `query_agent(prompt, agent="gemini")` | Brainstorming, keyword research | 100% (uses Gemini CLI subscription) |
-| `query_agent(prompt, agent="claude")` | Copy editing, quality review | 100% (uses Claude CLI subscription) |
-| `codex_review_code(...)` | Code review if extending agents | 100% (uses CLI) |
-| `query_multiple_agents(...)` | Consensus on ambiguous decisions | Parallel queries at no API cost |
+#### v3.0 (Local, Standalone Python)
 
-**Integration Strategy:**
-1. Attempt CLI-Agent first for all non-time-critical tasks
-2. Fall back to direct API if CLI unavailable or timeout
-3. Track CLI vs API usage in `model_performance` table
-4. Alert user if CLI availability drops (suggests subscription issue)
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         v3.0 MODEL ROUTING                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Model Family      Primary (Free)           Fallback (Paid)               │
+│   ────────────      ──────────────           ──────────────                │
+│   Gemini        →   CLI-Agent (gemini)   →   OpenRouter                    │
+│   OpenAI        →   CLI-Agent (codex)    →   OpenRouter                    │
+│   Claude        →   CLI-Agent (claude)   →   OpenRouter                    │
+│                                                                             │
+│   Startup: Detect which CLI tools are available                            │
+│   Runtime: Try CLI-Agent first, fall back to OpenRouter on failure         │
+│   Cooldown: Mark CLI as unavailable temporarily after repeated failures    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-### Model Selection Matrix
+#### v4.0 (Remote)
 
-| Agent | Transcript Size | Quality | Primary Model | Fallback |
-|-------|-----------------|---------|---------------|----------|
-| analyst | any | draft | CLI gemini | gemini-flash-8b |
-| analyst | any | standard | gemini-flash | openai-mini |
-| formatter | small | any | gemini-flash | openai-mini |
-| formatter | medium | any | gemini-flash | gpt-4o-mini |
-| formatter | large/xlarge | any | gpt-4o | claude-3.5 |
-| copy-editor | any | draft | CLI claude | openai-mini |
-| copy-editor | any | premium | claude-3.5 | gpt-4o |
-| seo-researcher | any | any | CLI gemini | gemini-flash-8b |
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         v4.0 MODEL ROUTING                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Model Family      Primary                                                 │
+│   ────────────      ───────                                                │
+│   Everything    →   OpenRouter                                              │
+│                                                                             │
+│   CLI-Agent not available on remote servers                                 │
+│   OpenRouter handles all routing and fallbacks                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Configuration
+
+```json
+{
+  "routing": {
+    "cli_agent": {
+      "enabled": true,
+      "timeout_seconds": 120,
+      "cooldown_on_failure_seconds": 300,
+      "agents": {
+        "gemini": { "enabled": true },
+        "codex": { "enabled": true },
+        "claude": { "enabled": true }
+      }
+    },
+    "openrouter": {
+      "enabled": true,
+      "api_key_env": "OPENROUTER_API_KEY"
+    }
+  }
+}
+```
+
+### Task-Aware Model Selection
+
+The routing above determines *how* to reach a model. This section determines *which* model to use.
+
+| Agent | Transcript Size | Quality | Preferred Model | Rationale |
+|-------|-----------------|---------|-----------------|-----------|
+| analyst | any | draft | gemini-flash | Fast, cheap, good enough |
+| analyst | any | standard | gemini-flash | Reliable for extraction |
+| formatter | small/medium | any | gemini-flash | Handles context well |
+| formatter | large/xlarge | any | gemini-flash or gpt-4o | Large context window needed |
+| copy-editor | any | draft | gemini-flash | Quick iterations |
+| copy-editor | any | premium | claude-3.5-sonnet | Best writing quality |
+| seo-researcher | any | any | gemini-flash | Fast keyword analysis |
+
+### CLI-Agent MCP Tools
+
+The `cli-agent-server` MCP provides these tools:
+
+| Tool | Use Case |
+|------|----------|
+| `query_agent(prompt, agent="gemini")` | Brainstorming, keyword research |
+| `query_agent(prompt, agent="claude")` | Copy editing, quality review |
+| `query_agent(prompt, agent="codex")` | Code-related tasks |
+| `delegate_task(goal, agent, max_iterations)` | Complex multi-step tasks |
+
+**Fallback behavior:**
+1. Check CLI-Agent availability at startup
+2. Attempt CLI-Agent for matching model family
+3. On timeout or error, mark unavailable (temporary cooldown)
+4. Route to OpenRouter as fallback
+5. Log which path was used for cost tracking
+
+### Prompt Management & Versioning (from Gemini review)
+
+Agent prompts need versioning and testing, especially when used across different models.
+
+#### Current State
+```
+.claude/agents/
+├── analyst.md
+├── formatter.md
+├── copy-editor.md
+└── seo-researcher.md
+```
+
+#### v3.0 Improvements
+
+| Aspect | Current | v3.0 Target |
+|--------|---------|-------------|
+| **Versioning** | Git history only | Semantic versioning in frontmatter |
+| **Model compatibility** | Assumed universal | Model-specific variants or notes |
+| **Testing** | Manual | Sample inputs with expected outputs |
+| **Rollback** | Git revert | Config flag to use previous version |
+
+**Prompt frontmatter format:**
+```yaml
+---
+version: 1.2.0
+models_tested: [gemini-2.0-flash, claude-3.5-sonnet, gpt-4o-mini]
+last_updated: 2024-12-15
+breaking_changes: false
+---
+```
+
+**Testing approach:**
+- Maintain `tests/prompt_samples/` with input transcripts
+- Expected output patterns (not exact matches)
+- Run before deploying prompt changes
+- Log prompt version in manifest for each deliverable
 
 ---
 
@@ -1439,7 +1631,7 @@ This allows testing v3.0 components without breaking v2.0 production use.
 
 ### Phase 2: The Nervous System (API Layer)
 
-**Goal:** Enable external control without touching files.
+**Goal:** Enable external control without touching files, plus infrastructure reliability improvements from agent feedback.
 
 | Task | Priority | Complexity | Agent Assignment |
 |------|----------|------------|------------------|
@@ -1450,8 +1642,20 @@ This allows testing v3.0 components without breaking v2.0 production use.
 | Pydantic models for validation | Medium | Low | CLI-Agent (Gemini) |
 | OpenAPI documentation | Low | Low | CLI-Agent (Gemini) |
 | Authentication (optional) | Low | Medium | Defer to Phase 4 |
+| **Stale job recovery** (heartbeat, auto-reset) | High | Medium | Claude Code |
+| **Step-level status tracking** (resumable workflows) | High | Medium | Claude Code |
+| **SRT speaker normalization** (pre-processing) | Medium | Medium | Claude Code |
+| **Dynamic model registry** (fetch pricing/capabilities) | Medium | Medium | Claude Code |
+| **OpenRouter vs DIY analysis** (pending docs review) | High | Low | Research task |
 
-**Estimated Duration:** 2-3 focused development sessions
+**Estimated Duration:** 4-5 focused development sessions (padded per Gemini review)
+
+**Blocking dependency:** OpenRouter analysis should complete before implementing dynamic model registry to determine architecture (Option A vs B).
+
+**Infrastructure tasks (from Gemini review):**
+- SQLite schema migrations via Alembic
+- SQLite backup strategy (daily snapshots, pre-upgrade backups)
+- Prompt versioning system for agent prompts
 
 ### Phase 3: The Face (Web & Visuals)
 
@@ -1473,7 +1677,7 @@ This allows testing v3.0 components without breaking v2.0 production use.
 | Dark mode support | Low | Low | CLI-Agent (Gemini) |
 | Mobile-responsive layout | Medium | Medium | CLI-Agent (Gemini) |
 
-**Estimated Duration:** 4-5 focused development sessions (increased due to workspace features)
+**Estimated Duration:** 5-6 focused development sessions (padded per Gemini review - React from scratch is aggressive)
 
 ### Phase 4: Polish & Integration
 
@@ -1483,6 +1687,8 @@ This allows testing v3.0 components without breaking v2.0 production use.
 |------|----------|------------|------------------|
 | CLI-Agent MCP integration | High | Medium | Claude Code |
 | Chat agent workflow (copy-editor) | High | High | Claude Code |
+| **Large transcript chunking** | High | High | Claude Code |
+| **Parallel chunk processing** | Medium | High | Claude Code |
 | Eject button implementation | Medium | Medium | Claude Code |
 | Smart retry logic | Medium | Low | CLI-Agent (Claude) |
 | Screenshot ingestion | Low | Medium | Defer |
@@ -1490,7 +1696,14 @@ This allows testing v3.0 components without breaking v2.0 production use.
 | Mobile-responsive web | Low | Low | CLI-Agent (Gemini) |
 | User onboarding flow | Medium | Medium | Claude Code |
 
-**Estimated Duration:** 2-3 focused development sessions
+**Large Transcript Chunking Strategy:**
+- Transcripts >100K chars split into overlapping chunks for parallel formatting
+- Each chunk assigned to separate CLI-Agent instance
+- Results merged with overlap deduplication
+- Holistic tasks (brainstorming, titles) use summarized context or full text with larger-context model
+- Size estimation warns before processing transcripts >200K chars
+
+**Estimated Duration:** 4-5 focused development sessions (padded per Gemini review)
 
 ### Phase 5: Documentation & Release
 
@@ -1605,14 +1818,16 @@ Merge Point: Full page integration
 | SQLite vs Postgres? | SQLite | Single-user, local-first, simpler deployment |
 | FastAPI vs Flask? | FastAPI | Async support, auto OpenAPI docs, Pydantic native |
 | React vs Vue vs Svelte? | React | Larger ecosystem, more familiar, Tailwind works well |
+| **Authentication?** | Local-only (no auth) | Single user, local tool for foreseeable future. Remote access deferred to post-v3.0. |
+| **Artifact delivery?** | Both (adaptive) | Always save to disk; also emit Claude Artifacts in Desktop, show inline in web. Interface detection via MCP presence or API headers. |
+| **Deployment model?** | Single entry point | One `python run.py` starts orchestrator + API + serves web. Flags available for running components separately if needed. |
+| **Testing strategy?** | Phased approach | Phase 2: critical path tests (queue, jobs, API). Phase 3: key web workflow integration tests. Phase 4: E2E for copy-editor chat. |
 
 ### Still Open
 
 | Question | Options | Decision Needed By |
 |----------|---------|-------------------|
-| **Authentication?** | None (local only) vs. Simple token vs. OAuth | Phase 4 |
-| **Redis for job queue?** | SQLite polling vs. Redis pub/sub | Phase 4 (if remote processing needed) |
-| **Artifact delivery in chat?** | Claude Artifacts vs. File saves vs. Both | Phase 4 (copy-editor workflow) |
+| **Redis for job queue?** | SQLite polling vs. Redis pub/sub | Post-v3.0 (if remote processing needed) |
 | **Remote processing?** | Local only vs. Optional remote worker | Post-v3.0 |
 | **Notification system?** | None vs. Desktop notifications vs. Email | Post-v3.0 |
 
@@ -1638,6 +1853,195 @@ Merge Point: Full page integration
 - **Mobile app**: Push notifications, quick status checks
 - **Plugin system**: Custom agents, external integrations
 - **Self-hosted option**: Docker compose for easy deployment
+- **Remote API access**: Simple token auth for accessing from other devices
+- **Collaborative document editing (v4.0 vision)**: Integration with Google Docs or similar, where agent writes to a live document, user edits directly, agent reviews changes - true back-and-forth collaboration like working with a human editor
+  - **Note (from Gemini review):** This is a significant re-architecture, not an incremental upgrade. Would require real-time sync, potentially CRDTs/OTs, robust auth, and fundamental changes to the data layer. Plan accordingly.
+- **Production deployment hardening (v4.0)**: ASGI server (Gunicorn + Uvicorn), process management (systemd/supervisor), environment variable management for different deployment contexts
+
+### Remote Deployment Options (v4.0 Consideration)
+
+Moving from local-only to remote operation. Three options, in order of increasing impact and requirements:
+
+| Option | Description | Cost | Requirements to Proceed |
+|--------|-------------|------|------------------------|
+| **A. Proxmox (Self-Hosted)** | Run on home network VM | ~$0/month (electricity) | Docker packaging, remote MCP transport, basic auth |
+| **B. Cloud VPS** | DigitalOcean, Linode, etc. | $5-25/month + LLM costs | Same as A, plus domain/SSL, hardened security |
+| **C. PBSWI Engineering Infrastructure** | Integrated into station's automated post-processing suite | $0 (absorbed by station) | **High bar** - see below |
+
+#### Option C Requirements (PBSWI Engineering)
+
+For the station to consider adopting this tool:
+
+| Requirement | Why It Matters | v3.0 Status |
+|-------------|----------------|-------------|
+| **Rock-solid reliability** | Can't break their pipeline | Partial - adding heartbeat, recovery |
+| **Predictable, low cost** | They won't approve open-ended LLM spend | Needs cost caps, budget alerts |
+| **Easy integration** | Must fit their existing workflows | Needs API, possibly auto-ingest |
+| **Minimal maintenance** | Engineering can't babysit it | Needs self-healing, good logging |
+| **Clear documentation** | Handoff to their team | Phase 5 deliverable |
+| **Proven track record** | "It works for me" isn't enough | Needs months of stable production use |
+
+#### Auto-Ingest Considerations (All Remote Options)
+
+If deployed remotely with access to caption sources (e.g., mmingest.pbswi.wisc.edu):
+
+**Filtering is essential** - not every video needs SEO metadata. Options:
+- Show whitelist (auto-process specific programs)
+- Manual approval queue (review before processing)
+- Keyword/date filters
+- Hybrid approach
+
+**Estimated volume:** 40-200 videos/month × $0.03-0.15 = $4-20/month LLM cost if processing everything. Filtering reduces this significantly.
+
+#### Recommendation
+
+Focus v3.0 on local reliability and cost optimization. Remote deployment becomes viable for v4.0 once:
+1. Months of stable local production use
+2. Cost tracking proves predictable spend
+3. Dynamic model registry minimizes per-transcript cost
+4. Documentation is complete enough for handoff
+
+The PBSWI Engineering option is the "north star" - if the tool is good enough for them, it's good enough for anyone.
+
+### Graceful Degradation: Prompt-Only Fallback
+
+**Goal:** If MCP server is unavailable, the editor agent should still function in a reduced-capability mode using only the system prompt and knowledge files.
+
+#### Two Operating Modes
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         OPERATING MODES                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  FULL MODE (MCP Available)                                                  │
+│  ─────────────────────────                                                  │
+│  ├── Queue management (list, prioritize, monitor)                           │
+│  ├── Project file access (read transcripts, deliverables)                   │
+│  ├── Automated processing (trigger jobs, track status)                      │
+│  ├── Revision saving (auto-increment versions)                              │
+│  └── Real-time status updates                                               │
+│                                                                             │
+│  PROMPT-ONLY MODE (MCP Unavailable)                                         │
+│  ──────────────────────────────────                                         │
+│  ├── Manual transcript input (user pastes into chat)                        │
+│  ├── Brainstorming via conversation                                         │
+│  ├── Copy revision via conversation                                         │
+│  ├── User manually saves outputs                                            │
+│  └── Works from Claude web, desktop, mobile - anywhere                      │
+│                                                                             │
+│  DETECTION                                                                  │
+│  ─────────                                                                  │
+│  On session start, agent checks for MCP tools:                              │
+│  ├── MCP tools present? → Full mode, greet with project status              │
+│  └── No MCP tools? → Prompt-only mode, explain manual workflow              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Capability Comparison
+
+| Capability | Full Mode | Prompt-Only Mode |
+|------------|-----------|------------------|
+| Transcript input | Load from queue/files | User pastes into chat |
+| Brainstorming | Auto-saved to project | Output in chat, user saves |
+| Copy revision | Versioned, auto-saved | Output in chat, user saves |
+| Queue management | Full control | Not available |
+| Project history | Access all deliverables | User must provide context |
+| Keyword research | Access brainstorming doc | User provides or agent regenerates |
+| Platform | Claude Desktop + MCP | Any Claude interface |
+
+#### Agent Greeting by Mode
+
+**Full Mode:**
+```
+I see you're connected to the Editorial Assistant. You have 3 projects
+in queue and 2WLI1206HD is ready for editing.
+
+What would you like to work on?
+```
+
+**Prompt-Only Mode:**
+```
+I'm running in prompt-only mode (MCP server not detected). I can still
+help with transcript analysis and copy editing, but you'll need to:
+- Paste transcripts directly into our chat
+- Save any outputs manually to your project folders
+
+To get full functionality, start the MCP server with `python run.py`.
+
+Ready to work on a transcript? Paste it here or tell me what you need.
+```
+
+#### Implementation
+
+```python
+# In editor agent system prompt / startup logic
+
+def detect_mode():
+    """Check if MCP tools are available."""
+    try:
+        # Attempt to call a simple MCP tool
+        result = mcp__editorial-assistant__get_queue_status()
+        return "full"
+    except:
+        return "prompt-only"
+
+# Agent behavior adapts based on mode
+MODE = detect_mode()
+
+if MODE == "full":
+    # Load project context, show status, offer queue management
+    ...
+else:
+    # Explain limitations, offer manual workflow
+    ...
+```
+
+#### Knowledge Folder for Prompt-Only Mode
+
+The prompt-only mode relies on a Claude Project with:
+
+```
+project-knowledge/
+├── EDITOR_AGENT_INSTRUCTIONS.md    # Full system prompt
+├── templates/
+│   ├── brainstorming_template.md
+│   ├── copy_revision_template.md
+│   └── keyword_report_template.md
+├── style-guides/
+│   ├── ap_style_reference.md
+│   └── pbs_brand_guidelines.md
+└── examples/
+    ├── good_brainstorming_example.md
+    └── good_revision_example.md
+```
+
+This ensures consistent output quality even without MCP infrastructure.
+
+#### Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Resilience** | Work continues even if local server is down |
+| **Portability** | Use from any device without setup |
+| **Onboarding** | New users can try before setting up infrastructure |
+| **Emergency fallback** | Always have a working path |
+| **Travel/mobile** | Quick edits from phone or borrowed computer |
+
+#### Observability Strategy (v3.0 vs v4.0)
+
+| Version | Environment | LLM Sources | Observability Approach |
+|---------|-------------|-------------|------------------------|
+| **v3.0** | Local | OpenRouter + CLI-Agent | Current tracking (manifest, session_stats). CLI-Agent usage is "free tier" via local CLI subscriptions. |
+| **v4.0** | Remote | OpenRouter only | **Langfuse** (self-hosted). CLI-Agent impractical on remote server. All costs are 1:1 metered, precise tracking essential. |
+
+**Why defer Langfuse to v4.0:**
+- v3.0 runs locally where CLI-Agent defrays costs with existing subscriptions
+- CLI-Agent calls are opaque to Langfuse anyway (bypass our code)
+- When remote, CLI-Agent isn't available, so all LLM calls go through OpenRouter
+- OpenRouter → Langfuse broadcast gives full visibility on 100% of costs
+- Simpler v3.0, better observability when it actually matters (production/remote)
 
 ---
 
