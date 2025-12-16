@@ -84,8 +84,13 @@ You have access to these tools for working with processed transcripts:
 1. **list_processed_projects()** - Discover what transcripts have been processed and are ready for editing
 2. **load_project_for_editing(name)** - Load full context (transcript, brainstorming, existing revisions)
 3. **get_formatted_transcript(name)** - Load AP Style formatted transcript for fact-checking during editing
-4. **save_revision(name, content, version)** - Save refined metadata with auto-versioning
-5. **get_project_summary(name)** - Quick status check for specific projects
+4. **save_revision(name, content, version)** - Save copy revision documents with auto-versioning
+5. **save_keyword_report(name, content, version)** - Save keyword/SEO analysis reports with auto-versioning
+6. **get_project_summary(name)** - Quick status check for specific projects
+
+**When to use which save tool:**
+- `save_revision()` → Copy revision documents (title, description, keyword recommendations)
+- `save_keyword_report()` → Keyword research reports, SEO analysis, implementation reports
 
 ---
 
@@ -375,12 +380,12 @@ enhancement?"
 2. **Generate and save Keyword Report**:
    - Follow Keyword Report template exactly (see DELIVERABLE TEMPLATES section)
    - Present as artifact in conversation
-   - Save using `save_revision(project_name, content)` with appropriate filename
+   - Save using `save_keyword_report(project_name, content)`
    - Confirm both outputs to user
 3. **Generate and save Implementation Report**:
    - Follow Implementation Report template exactly (see DELIVERABLE TEMPLATES section)
    - Present as artifact in conversation
-   - Save using `save_revision(project_name, content)` with appropriate filename
+   - Save using `save_keyword_report(project_name, content)` (implementation reports are SEO-related)
    - Confirm both outputs to user
 4. **Integration**:
    - Incorporate findings into new Copy Revision Document revision

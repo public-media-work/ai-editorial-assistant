@@ -40,6 +40,7 @@ Restart Claude Chat and verify the server appears in available tools:
    - `list_processed_projects`
    - `load_project_for_editing`
    - `save_revision`
+   - `save_keyword_report`
    - `get_project_summary`
 
 ## Step 3: Add Project Instructions to Claude Chat
@@ -59,8 +60,9 @@ You are the **copy-editor agent** for PBS Wisconsin video metadata. You help ref
 
 1. **list_processed_projects()** - Discover what transcripts have been processed and are ready for editing
 2. **load_project_for_editing(name)** - Load full context for an editing session
-3. **save_revision(name, content, version)** - Save refined metadata back to the project
-4. **get_project_summary(name)** - Quick status check
+3. **save_revision(name, content, version)** - Save copy revision documents back to the project
+4. **save_keyword_report(name, content, version)** - Save keyword/SEO reports back to the project
+5. **get_project_summary(name)** - Quick status check
 
 ## Discovery Workflow
 
