@@ -166,17 +166,49 @@ async function scanProjectDirectory(projectPath: string): Promise<ProcessedProje
 
     let manifest: ProjectManifest | null = null;
 
-    // Try to read manifest if exists
+    // Try to read manifest if exists (check both manifest.json and .state.json)
     try {
       const manifestContent = await fs.readFile(manifestPath, "utf-8");
       manifest = JSON.parse(manifestContent);
     } catch {
-      // No manifest, scan directory manually
+      // Try .state.json as alternative (CLI workflow format)
+      try {
+        const stateContent = await fs.readFile(path.join(projectPath, ".state.json"), "utf-8");
+        const state = JSON.parse(stateContent);
+        // Convert .state.json format to manifest format
+        manifest = {
+          transcript_file: state.transcript || "",
+          project_name: state.project || projectName,
+          program_type: state.program || "Unknown",
+          processing_started: state.created || "",
+          status: state.phases?.brainstorming?.status === "complete" ? "ready_for_editing" : "processing",
+          content_summary: undefined,
+          deliverables: {
+            brainstorming: state.phases?.brainstorming?.output ? {
+              file: state.phases.brainstorming.output,
+              created: state.phases.brainstorming.completed_at || "",
+              agent: "transcript-analyst"
+            } : undefined,
+            formatted_transcript: state.formatted_transcript ? {
+              file: state.formatted_transcript,
+              created: state.created || "",
+              agent: "formatter"
+            } : undefined
+          },
+          metadata: {
+            duration: state.duration
+          }
+        } as ProjectManifest;
+      } catch {
+        // No manifest or state file, scan directory manually
+      }
     }
 
     // Resolve deliverable filenames (prefer manifest entries, fallback to common names)
+    // Supports both MCP workflow (manifest.json) and CLI workflow (.state.json) naming
     const brainstormingFile = await findExistingFile(projectPath, [
       manifest?.deliverables?.brainstorming?.file,
+      "01_brainstorming.md",           // CLI workflow
       "brainstorming.md",
       `${projectName}_brainstorming.md`,
       "digital_shorts_report.md",
@@ -185,6 +217,7 @@ async function scanProjectDirectory(projectPath: string): Promise<ProcessedProje
 
     const formattedFile = await findExistingFile(projectPath, [
       manifest?.deliverables?.formatted_transcript?.file,
+      "00_transcript.md",              // CLI workflow
       "formatted_transcript.md",
       `${projectName}_formatted_transcript.md`
     ]);
@@ -280,6 +313,7 @@ async function loadProjectForEditing(projectName: string): Promise<any> {
 
     const brainstormingFile = await findExistingFile(projectPath, [
       manifest?.deliverables?.brainstorming?.file,
+      "01_brainstorming.md",           // CLI workflow
       "brainstorming.md",
       `${projectName}_brainstorming.md`,
       "digital_shorts_report.md",
@@ -297,6 +331,7 @@ async function loadProjectForEditing(projectName: string): Promise<any> {
 
     const formattedFile = await findExistingFile(projectPath, [
       manifest?.deliverables?.formatted_transcript?.file,
+      "00_transcript.md",              // CLI workflow
       "formatted_transcript.md",
       `${projectName}_formatted_transcript.md`
     ]);
@@ -1237,11 +1272,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const manifestContent = await fs.readFile(path.join(projectPath, "manifest.json"), "utf-8");
         manifest = JSON.parse(manifestContent);
       } catch {
-        manifest = null;
+        // Try .state.json as alternative (CLI workflow format)
+        try {
+          const stateContent = await fs.readFile(path.join(projectPath, ".state.json"), "utf-8");
+          const state = JSON.parse(stateContent);
+          manifest = {
+            deliverables: {
+              formatted_transcript: state.formatted_transcript ? {
+                file: state.formatted_transcript,
+                created: state.created || "",
+                agent: "formatter"
+              } : undefined
+            }
+          } as ProjectManifest;
+        } catch {
+          manifest = null;
+        }
       }
 
       const formattedFile = await findExistingFile(projectPath, [
         manifest?.deliverables?.formatted_transcript?.file,
+        "00_transcript.md",              // CLI workflow
         "formatted_transcript.md",
         `${args.project_name}_formatted_transcript.md`
       ]);
