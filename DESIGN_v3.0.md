@@ -1831,6 +1831,36 @@ Merge Point: Full page integration
 | **Remote processing?** | Local only vs. Optional remote worker | Post-v3.0 |
 | **Notification system?** | None vs. Desktop notifications vs. Email | Post-v3.0 |
 
+### v3.0 Enhancement Notes (December 2024)
+
+#### Model Delegation for Cost Optimization
+
+**Issue:** Both chat agent (Claude Code) and CLI agent should delegate brainstorming/transcript tasks to cheaper, faster models. Currently:
+- Chat agent (`/brainstorm`, `/process-transcript`) runs directly with Claude Code's model (Opus/Sonnet)
+- CLI agent uses `openai-mini` by default but doesn't explicitly configure `BACKEND_PREFERENCES`
+
+**Note:** OpenAI-Mini struggled with long transcripts; Gemini models performed better.
+
+**Recommendations:**
+1. **Chat Agent**: Update slash commands to delegate to CLI-Agent or use OpenRouter model selection for transcript analysis tasks
+2. **CLI Agent**: Configure to use OpenRouter model selection or explicitly prefer Gemini models for long-form transcript processing
+3. **Config**: Ensure `llm-config.json` includes Gemini backends (e.g., `gemini-flash`) as preferred options for transcript tasks
+
+#### Status Page Visibility Improvements
+
+**Issue:** Dashboard doesn't clearly show:
+1. Whether watch script is running
+2. Incremental progress on each transcript
+3. How long until new transcripts appear / processing completes
+
+**Recommendations:**
+1. **Watch Script Indicator**: Add header indicator showing `[WATCHING]` or `[WATCH: OFF]`
+   - Check for PID file or `pgrep -f watch-transcripts`
+2. **Per-Transcript Progress**: Show granular progress in queue table (e.g., `[████░░] 67%`)
+   - Track phases: loading (10%), analyst (10-50%), formatter (50-90%), saving (90-100%)
+3. **Time-to-Next Visibility**: Display countdown for next scan and queue completion estimates
+   - `Next scan: 45s` | `Queue empty in: ~5 min`
+
 ---
 
 ## Part 12: Success Metrics
