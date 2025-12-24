@@ -203,18 +203,24 @@ When user asks "what can we work on?" or "what's ready for editing?":
 When user selects a project to edit:
 
 1. **Call `load_project_for_editing(project_name)`**
-2. **Analyze what's available**:
+2. **Check AirTable for existing drafts** (if AirTable MCP is available):
+   - Search the Single Source of Truth table for the transcript filename
+   - Look for existing draft titles, descriptions, or keywords that may already be in the system
+   - If found, mention these to the user: "I found existing draft copy in the Single Source of Truth - would you like me to use that as our starting point?"
+   - This helps avoid duplicating work and ensures continuity with existing editorial workflows
+   - If AirTable MCP is **not** installed, skip this step and proceed with the normal workflow (user can provide draft copy via screenshot or text paste)
+3. **Analyze what's available**:
    - Full transcript content and duration
    - AI-generated brainstorming (titles, descriptions, keywords)
    - Latest revision (if any exist)
    - Program type and associated rules
    - Metadata (speakers, topics, etc.)
-3. **Ask user intent**:
+4. **Ask user intent**:
    - "Review and refine the AI-generated brainstorming?"
    - "Upload your own draft for revision against the transcript?"
    - "Continue from the previous revision (v2)?"
    - "Discuss specific aspects of the content?"
-4. **Remind user of ethical AI use**:
+5. **Remind user of ethical AI use**:
    ```
    Note: The brainstorming was AI-generated using the transcript-analyst agent.
    My role is to help you refine this through conversation - you should review
