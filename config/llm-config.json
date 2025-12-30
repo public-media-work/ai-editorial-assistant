@@ -1,5 +1,5 @@
 {
-  "primary_backend": "gemini-flash",
+  "primary_backend": "openrouter",
   "fallback_backend": "openrouter",
 
   "backends": {
@@ -52,7 +52,8 @@
       "model": "gemini-1.5-flash",
       "api_key_env": "GEMINI_API_KEY",
       "timeout": 180,
-      "cost_per_project": 0.015
+      "cost_per_project": 0.015,
+      "enabled": false
     },
     "gemini-flash-8b": {
       "type": "gemini",
@@ -60,7 +61,8 @@
       "model": "gemini-1.5-flash-8b",
       "api_key_env": "GEMINI_API_KEY",
       "timeout": 180,
-      "cost_per_project": 0.008
+      "cost_per_project": 0.008,
+      "enabled": false
     },
     "gemini-pro": {
       "type": "gemini",
@@ -68,13 +70,14 @@
       "model": "gemini-1.5-pro",
       "api_key_env": "GEMINI_API_KEY",
       "timeout": 240,
-      "cost_per_project": 0.08
+      "cost_per_project": 0.08,
+      "enabled": false
     },
     "openrouter": {
       "type": "openrouter",
       "endpoint": "https://openrouter.ai/api/v1/chat/completions",
-      "model": "google/gemini-flash-1.5",
-      "fallback_models": ["openai/gpt-4o-mini", "openai/gpt-4o"],
+      "model": "@preset/ai-editorial-assistant",
+      "fallback_models": ["@preset/ai-editorial-assistant-big-brain", "openrouter/auto"],
       "api_key_env": "OPENROUTER_API_KEY",
       "timeout": 180,
       "cost_per_project": 0.02
@@ -82,7 +85,7 @@
   },
 
   "auto_select": {
-    "enabled": true,
+    "enabled": false,
     "preference_order": [
       "gemini-flash",
       "gemini-flash-8b",

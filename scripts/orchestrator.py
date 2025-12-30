@@ -113,10 +113,26 @@ def strip_code_fences(content: str) -> str:
     cleaned = cleaned.replace("```", "")
     return cleaned.strip() + "\n"
 
+
+def utc_now_iso(timespec: str | None = None) -> str:
+    """Timezone-aware UTC timestamp with trailing Z."""
+    now = datetime.now(timezone.utc)
+    iso = now.isoformat(timespec=timespec) if timespec else now.isoformat()
+    return iso.replace("+00:00", "Z")
+
+
+def estimate_transcript_minutes(transcript: str) -> float:
+    """Roughly estimate transcript duration to guide model selection."""
+    words = len(transcript.split())
+    if words == 0:
+        return 0.0
+    return words / WORDS_PER_MINUTE
+
 # Optional per-agent backend preferences; falls back to llm-config auto_select order
+# Defaults favor OpenRouter with Gemini (use dev credits first), upgrading to Pro for longer jobs
 BACKEND_PREFERENCES = {
-    "analyst": ["openai-mini", "gemini-flash-8b"],
-    "formatter": ["gemini-flash", "openai-mini"]
+    "analyst": ["openrouter"],
+    "formatter": ["openrouter"]
 }
 
 # Transcript length threshold for auto-upgrading formatter to gpt-4o (in characters)
@@ -124,6 +140,9 @@ FORMATTER_LARGE_TRANSCRIPT_THRESHOLD = 200000
 
 # Transcript length threshold to favor a more capable model for timestamp accuracy
 TIMESTAMP_ACCURACY_THRESHOLD = 120000
+
+WORDS_PER_MINUTE = 170  # Speech heuristic for duration estimates
+LONG_TRANSCRIPT_MINUTES = 15  # Upgrade to larger-context Gemini after this point
 
 
 def load_agent_prompt(agent_name: str) -> str:
@@ -182,7 +201,7 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
         manifest = {
             "project_name": project_name,
             "status": "in_progress",
-            "created_at": datetime.utcnow().isoformat() + "Z",
+            "created_at": utc_now_iso(),
             "deliverables": {}
         }
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -197,7 +216,7 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
 
         deliverable_entry = {
             "file": filename,
-            "created": datetime.utcnow().isoformat() + "Z",
+            "created": utc_now_iso(),
             "agent": agent
         }
 
@@ -213,7 +232,7 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
 
         if has_brainstorming and has_formatted:
             manifest["status"] = "ready_for_editing"
-            manifest["processing_completed"] = datetime.utcnow().isoformat() + "Z"
+            manifest["processing_completed"] = utc_now_iso()
 
             # Calculate total project cost
             total_cost = 0.0
@@ -296,18 +315,27 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, job_i
     Returns:
         tuple: (filename, metrics_dict)
     """
+    duration_minutes = estimate_transcript_minutes(transcript)
+    analyst_order = ["openrouter"]
+    original_prefs = BACKEND_PREFERENCES.get("analyst", [])
+    BACKEND_PREFERENCES["analyst"] = analyst_order
+
     # Create thread-local DB connection
     conn = get_db_connection()
     try:
         if verbose:
             print("\n→ Running transcript-analyst agent...")
+            print(f"  ℹ Estimated duration: {duration_minutes:0.1f} minutes → {analyst_order[0]}")
         log_session_event(conn, job_id, "transcript-analyst_started", {"project": project_name})
 
         analyst_prompt_template = load_agent_prompt("transcript-analyst")
         analyst_system = "You are a professional video content analyst. Generate the brainstorming document in Markdown format exactly as specified. Do NOT output JSON. Do NOT wrap output in code blocks."
         analyst_user = f"{analyst_prompt_template}\n\n# TRANSCRIPT TO ANALYZE\n\n{transcript}"
 
-        brainstorming_raw, backend_used, metrics = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+        try:
+            brainstorming_raw, backend_used, metrics = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+        finally:
+            BACKEND_PREFERENCES["analyst"] = original_prefs or BACKEND_PREFERENCES["analyst"]
         brainstorming = strip_code_fences(brainstorming_raw)
 
         output_dir = OUTPUT_DIR / project_name
@@ -341,11 +369,13 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, job
     Returns:
         tuple: (formatted_filename, timestamp_filename, metrics_dict)
     """
+    duration_minutes = estimate_transcript_minutes(transcript)
     # Create thread-local DB connection
     conn = get_db_connection()
     try:
         if verbose:
             print("\n→ Running formatter agent...")
+            print(f"  ℹ Estimated duration: {duration_minutes:0.1f} minutes")
         log_session_event(conn, job_id, "formatter_started", {"project": project_name})
 
         # Check transcript length and dynamically adjust backend preference for large transcripts
@@ -353,18 +383,19 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, job
         original_prefs = None
         formatter_override: list[str] | None = None
 
-        if transcript_length > FORMATTER_LARGE_TRANSCRIPT_THRESHOLD:
-            # Large transcript detected - prefer Gemini Pro (2M context) or gpt-4o for better performance
-            formatter_override = ["gemini-pro", "gemini-flash", "gemini-flash-8b", "openai", "openai-mini"]
+        long_context_needed = duration_minutes >= LONG_TRANSCRIPT_MINUTES or transcript_length > FORMATTER_LARGE_TRANSCRIPT_THRESHOLD
+
+        if long_context_needed:
+            # Large/long transcript - stick to OpenRouter auto (it will pick a suitable model)
+            formatter_override = ["openrouter"]
             if verbose:
-                print(f"  ⚠ Large transcript detected ({transcript_length:,} chars) - upgrading to Gemini Pro (2M context)")
-            log_session_event(conn, job_id, "formatter_large_transcript_detected", {"project": project_name, "length": transcript_length, "upgrade_to": "gemini-pro"})
-        elif transcript_length > TIMESTAMP_ACCURACY_THRESHOLD:
-            # Medium/long transcript - prefer more capable model to improve timestamp alignment (Gemini-first)
-            formatter_override = ["gemini-flash", "gemini-flash-8b", "openai", "openai-mini"]
+                print(f"  ⚠ Long transcript detected ({transcript_length:,} chars, ~{duration_minutes:0.1f} min) - using OpenRouter auto for larger context")
+            log_session_event(conn, job_id, "formatter_large_transcript_detected", {"project": project_name, "length": transcript_length, "duration_minutes": duration_minutes, "upgrade_to": "openrouter"})
+        else:
+            # Short/medium transcript - still use OpenRouter auto
+            formatter_override = ["openrouter"]
             if verbose:
-                print(f"  ⚠ Transcript {transcript_length:,} chars - upgrading formatter for better timestamp accuracy (Gemini-first)")
-            log_session_event(conn, job_id, "formatter_timestamp_upgrade", {"project": project_name, "length": transcript_length, "upgrade_to": "gemini-flash"})
+                print(f"  ℹ Estimated duration: {duration_minutes:0.1f} minutes → openrouter (auto)")
 
         if formatter_override:
             original_prefs = BACKEND_PREFERENCES.get("formatter", [])
@@ -448,7 +479,7 @@ def process_job_from_db(job_row, llm: LLMBackend, conn, verbose: bool = True):
         print(f"{'='*60}")
 
     log_session_event(conn, job_id, "project_processing_started", {"project": project_name})
-    update_job_status(conn, job_id, "in_progress", {"start_time": datetime.utcnow().isoformat(timespec='milliseconds') + "Z"})
+    update_job_status(conn, job_id, "in_progress", {"start_time": utc_now_iso(timespec='milliseconds')})
 
     try:
         # Load transcript
@@ -489,7 +520,7 @@ def process_job_from_db(job_row, llm: LLMBackend, conn, verbose: bool = True):
         
         log_session_event(conn, job_id, "project_processing_completed", {"project": project_name, "total_cost": total_cost, "total_tokens": total_tokens})
         update_job_status(conn, job_id, "completed", {
-            "end_time": datetime.utcnow().isoformat(timespec='milliseconds') + "Z",
+            "end_time": utc_now_iso(timespec='milliseconds'),
             "estimated_cost": total_cost, # Update actual cost here
             "logs": "Processing successful."
         })
@@ -500,7 +531,7 @@ def process_job_from_db(job_row, llm: LLMBackend, conn, verbose: bool = True):
         print(f"\n✗ Error processing Job ID: {job_id}, Project: {project_name}: {error_message}")
         log_session_event(conn, job_id, "project_processing_failed", {"project": project_name, "error": error_message})
         update_job_status(conn, job_id, "failed", {
-            "end_time": datetime.utcnow().isoformat(timespec='milliseconds') + "Z",
+            "end_time": utc_now_iso(timespec='milliseconds'),
             "logs": f"Error: {error_message}"
         })
         return False

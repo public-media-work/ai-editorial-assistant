@@ -71,3 +71,179 @@
 [14:41:56] [WARN] ⚠ Encoding retry (latin-1) for 6GWQ2502
 [14:41:56] [WARN] ⚠ Encoding retry (latin-1) for 6TLB0303
 [12:50:07] [WARN] ⚠ Encoding retry (latin-1) for 6GWQ2502
+[13:49:08] [WARN] ⚠ Encoding retry (latin-1) for 2WLI1209HD
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [WARN] ⚠ Encoding retry (latin-1) for 9UNP2011HD (1)
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [WARN] ⚠ Encoding retry (latin-1) for 2WLI1209HD
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[13:49:08] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [WARN] ⚠ Encoding retry (latin-1) for 9UNP2011HD (1)
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [WARN] ⚠ Encoding retry (latin-1) for 2WLI1209HD
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[15:00:19] [ERROR] [red]Error: All backends failed: openai-mini: unavailable | gemini-flash-8b: unavailable[/]
+[17:58:15] [INFO] ⚠ Long transcript (116,626 chars, ~101.9 min) - upgrading to Gemini Pro (OpenRouter)
+[17:58:15] [INFO] ℹ Estimated duration: 101.9 minutes → openrouter-gemini-pro
+[17:58:15] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:15] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:15] [WARN] Retry: openrouter failed for analyst
+[17:58:15] [WARN] Retry: openrouter failed for formatter
+[17:58:15] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:15] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:15] [ERROR] [red]Error: All backends failed: openrouter-gemini-pro: OpenRouter API error: 400 - {"error":{"message":"'models...[/]
+[17:58:16] [INFO] ⚠ Long transcript (72,287 chars, ~62.7 min) - upgrading to Gemini Pro (OpenRouter)
+[17:58:16] [INFO] ℹ Estimated duration: 62.7 minutes → openrouter-gemini-pro
+[17:58:16] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:16] [WARN] Retry: openrouter failed for formatter
+[17:58:16] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:18] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:18] [WARN] Retry: openrouter failed for analyst
+[17:58:18] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:18] [ERROR] [red]Error: All backends failed: openrouter-gemini-pro: OpenRouter API error: 400 - {"error":{"message":"'models...[/]
+[17:58:18] [WARN] ⚠ Encoding retry (latin-1) for 9UNP2011HD (1)
+[17:58:18] [INFO] ⚠ Long transcript (78,800 chars, ~65.8 min) - upgrading to Gemini Pro (OpenRouter)
+[17:58:18] [INFO] ℹ Estimated duration: 65.8 minutes → openrouter-gemini-pro
+[17:58:19] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:19] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:19] [WARN] Retry: openrouter failed for formatter
+[17:58:19] [WARN] Retry: openrouter failed for analyst
+[17:58:19] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:19] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:19] [ERROR] [red]Error: All backends failed: openrouter-gemini-pro: OpenRouter API error: 400 - {"error":{"message":"'models...[/]
+[17:58:19] [INFO] ℹ Estimated duration: 0.9 minutes → openrouter-gemini-flash
+[17:58:19] [INFO] ℹ Estimated duration: 0.9 minutes → openrouter-gemini-flash
+[17:58:19] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:19] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:20] [WARN] Retry: openrouter failed for formatter
+[17:58:20] [WARN] Retry: openrouter failed for analyst
+[17:58:20] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:20] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:20] [ERROR] [red]Error: All backends failed: openrouter-gemini-flash: OpenRouter API error: 400 - {"error":{"message":"'mode...[/]
+[17:58:20] [WARN] ⚠ Encoding retry (latin-1) for 2WLI1209HD
+[17:58:20] [INFO] ⚠ Long transcript (42,442 chars, ~36.3 min) - upgrading to Gemini Pro (OpenRouter)
+[17:58:20] [INFO] ℹ Estimated duration: 36.3 minutes → openrouter-gemini-pro
+[17:58:20] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:20] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:20] [WARN] Retry: openrouter failed for analyst
+[17:58:20] [WARN] Retry: openrouter failed for formatter
+[17:58:21] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:21] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:21] [ERROR] [red]Error: All backends failed: openrouter-gemini-pro: OpenRouter API error: 400 - {"error":{"message":"'models...[/]
+[17:58:21] [INFO] ℹ Estimated duration: 5.6 minutes → openrouter-gemini-flash
+[17:58:21] [INFO] ℹ Estimated duration: 5.6 minutes → openrouter-gemini-flash
+[17:58:21] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:21] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:21] [WARN] Retry: openrouter failed for formatter
+[17:58:21] [WARN] Retry: openrouter failed for analyst
+[17:58:21] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:21] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:21] [ERROR] [red]Error: All backends failed: openrouter-gemini-flash: OpenRouter API error: 400 - {"error":{"message":"'mode...[/]
+[17:58:21] [INFO] ℹ Estimated duration: 6.5 minutes → openrouter-gemini-flash
+[17:58:21] [INFO] ℹ Estimated duration: 6.5 minutes → openrouter-gemini-flash
+[17:58:22] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:22] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:22] [WARN] Retry: openrouter failed for analyst
+[17:58:22] [WARN] Retry: openrouter failed for formatter
+[17:58:22] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:22] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:22] [ERROR] [red]Error: All backends failed: openrouter-gemini-flash: OpenRouter API error: 400 - {"error":{"message":"'mode...[/]
+[17:58:22] [INFO] ℹ Estimated duration: 0.3 minutes → openrouter-gemini-flash
+[17:58:22] [INFO] ℹ Estimated duration: 0.3 minutes → openrouter-gemini-flash
+[17:58:22] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:22] [WARN] Retry: openrouter failed for formatter
+[17:58:23] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:23] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:23] [WARN] Retry: openrouter failed for analyst
+[17:58:23] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:23] [ERROR] [red]Error: All backends failed: openrouter-gemini-flash: OpenRouter API error: 400 - {"error":{"message":"'mode...[/]
+[17:58:23] [INFO] ℹ Estimated duration: 0.1 minutes → openrouter-gemini-flash
+[17:58:23] [INFO] ℹ Estimated duration: 0.1 minutes → openrouter-gemini-flash
+[17:58:23] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:23] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:23] [WARN] Retry: openrouter failed for analyst
+[17:58:23] [WARN] Retry: openrouter failed for formatter
+[17:58:23] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:24] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:24] [ERROR] [red]Error: All backends failed: openrouter-gemini-flash: OpenRouter API error: 400 - {"error":{"message":"'mode...[/]
+[17:58:24] [INFO] ℹ Estimated duration: 0.7 minutes → openrouter-gemini-flash
+[17:58:24] [INFO] ℹ Estimated duration: 0.7 minutes → openrouter-gemini-flash
+[17:58:24] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:24] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:24] [WARN] Retry: openrouter failed for formatter
+[17:58:24] [WARN] Retry: openrouter failed for analyst
+[17:58:24] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:24] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:24] [ERROR] [red]Error: All backends failed: openrouter-gemini-flash: OpenRouter API error: 400 - {"error":{"message":"'mode...[/]
+[17:58:24] [INFO] ℹ Estimated duration: 0.6 minutes → openrouter-gemini-flash
+[17:58:24] [INFO] ℹ Estimated duration: 0.6 minutes → openrouter-gemini-flash
+[17:58:24] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:24] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:25] [WARN] Retry: openrouter failed for analyst
+[17:58:25] [WARN] Retry: openrouter failed for formatter
+[17:58:25] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:25] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:25] [ERROR] [red]Error: All backends failed: openrouter-gemini-flash: OpenRouter API error: 400 - {"error":{"message":"'mode...[/]
+[17:58:25] [INFO] ℹ Estimated duration: 0.3 minutes → openrouter-gemini-flash
+[17:58:25] [INFO] ℹ Estimated duration: 0.3 minutes → openrouter-gemini-flash
+[17:58:25] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[17:58:25] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[17:58:25] [WARN] Retry: openrouter failed for formatter
+[17:58:25] [WARN] Retry: openrouter failed for analyst
+[17:58:25] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[17:58:26] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[17:58:26] [ERROR] [red]Error: All backends failed: openrouter-gemini-flash: OpenRouter API error: 400 - {"error":{"message":"'mode...[/]
+[18:02:47] [INFO] ⚠ Long transcript (116,626 chars, ~101.9 min) - upgrading to Gemini Pro (OpenRouter)
+[18:02:47] [INFO] ℹ Estimated duration: 101.9 minutes → openrouter-gemini-pro
+[18:02:47] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[18:02:48] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[18:05:14] [INFO] ⚠ Long transcript (72,287 chars, ~62.7 min) - upgrading to Gemini Pro (OpenRouter)
+[18:05:14] [INFO] ℹ Estimated duration: 62.7 minutes → openrouter-gemini-pro
+[18:05:14] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[18:05:14] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[18:08:20] [INFO] ⚠ Long transcript (116,626 chars, ~101.9 min) - upgrading to Gemini Pro (OpenRouter)
+[18:08:20] [INFO] ℹ Estimated duration: 101.9 minutes → openrouter-gemini-pro
+[18:08:20] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[18:08:20] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[18:14:04] [INFO] ⚠ Long transcript (72,287 chars, ~62.7 min) - upgrading to Gemini Pro (OpenRouter)
+[18:14:04] [INFO] ℹ Estimated duration: 62.7 minutes → openrouter-gemini-pro
+[18:14:04] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[18:14:04] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[18:20:20] [INFO] ℹ Estimated duration: 0.9 minutes → openrouter-gemini-flash
+[18:20:20] [INFO] ℹ Estimated duration: 0.9 minutes → openrouter-gemini-flash
+[18:20:20] [WARN] Retry: openrouter-gemini-flash failed for formatter
+[18:20:20] [WARN] Retry: openrouter-gemini-flash failed for analyst
+[18:21:09] [WARN] ⚠ Encoding retry (latin-1) for 2WLI1209HD
+[18:21:09] [INFO] ⚠ Long transcript (42,442 chars, ~36.3 min) - upgrading to Gemini Pro (OpenRouter)
+[18:21:09] [INFO] ℹ Estimated duration: 36.3 minutes → openrouter-gemini-pro
+[18:21:09] [WARN] Retry: openrouter-gemini-pro failed for formatter
+[18:21:09] [WARN] Retry: openrouter-gemini-pro failed for analyst
+[18:31:45] [INFO] ℹ Estimated duration: 5.6 minutes → openrouter (auto)
+[18:31:45] [INFO] ℹ Estimated duration: 5.6 minutes → openrouter
+[18:32:49] [INFO] ℹ Estimated duration: 6.5 minutes → openrouter (auto)
+[18:32:49] [INFO] ℹ Estimated duration: 6.5 minutes → openrouter
+[18:36:27] [INFO] ℹ Estimated duration: 0.3 minutes → openrouter (auto)
+[18:36:27] [INFO] ℹ Estimated duration: 0.3 minutes → openrouter

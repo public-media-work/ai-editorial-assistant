@@ -1,0 +1,10 @@
+/Users/mriechers/Developer/editorial-assistant/scripts/process_queue_auto.py:270: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat() + "Z",
+/Users/mriechers/Developer/editorial-assistant/scripts/process_queue_auto.py:699: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  start_time = datetime.utcnow().isoformat() + "Z"
+/Users/mriechers/Developer/editorial-assistant/scripts/process_queue_auto.py:173: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "created": datetime.utcnow().isoformat() + "Z",
+/Users/mriechers/Developer/editorial-assistant/scripts/process_queue_auto.py:194: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  manifest["processing_completed"] = datetime.utcnow().isoformat() + "Z"
+/Users/mriechers/Developer/editorial-assistant/scripts/process_queue_auto.py:706: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "completed_at": datetime.utcnow().isoformat() + "Z"

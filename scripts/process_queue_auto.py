@@ -9,7 +9,7 @@ import sys
 import time
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
@@ -43,12 +43,18 @@ def strip_code_fences(content: str) -> str:
     return cleaned.strip() + "\n"
 
 
+def utc_now_iso(timespec: str | None = None) -> str:
+    """Timezone-aware UTC timestamp with trailing Z."""
+    now = datetime.now(timezone.utc)
+    iso = now.isoformat(timespec=timespec) if timespec else now.isoformat()
+    return iso.replace("+00:00", "Z")
+
+
 # Optional per-agent backend preferences; falls back to llm-config auto_select order
-# analyst: Use cheap model for brainstorming
-# formatter: Prefer Gemini Flash (1M context, fast, cheap) for formatting large transcripts
+# Keep it simple: rely on OpenRouter auto to balance cost/performance
 BACKEND_PREFERENCES = {
-    "analyst": ["openai-mini", "gemini-flash-8b"],
-    "formatter": ["gemini-flash", "openai-mini"]
+    "analyst": ["openrouter"],
+    "formatter": ["openrouter"]
 }
 
 # Transcript length threshold for auto-upgrading formatter to gpt-4o (in characters)
@@ -60,7 +66,22 @@ FORMATTER_LARGE_TRANSCRIPT_THRESHOLD = 200000
 # Captures medium/long transcripts that benefit from better alignment without waiting for the large-doc upgrade
 TIMESTAMP_ACCURACY_THRESHOLD = 120000
 
+WORDS_PER_MINUTE = 170  # Speech heuristic for duration estimates
+LONG_TRANSCRIPT_MINUTES = 15  # Upgrade to larger-context Gemini after this point
+
 CODE_FENCE_PATTERN = re.compile(r"```[a-zA-Z0-9_+-]*\s*\n(.*?)\n```", re.DOTALL)
+
+# Markers the formatter agent adds when it has uncertainties to flag for review
+NEEDS_REVIEW_MARKER = "<!-- NEEDS_REVIEW -->"
+NEEDS_REVIEW_SECTION = "## Review Notes"  # Backup detection if hidden marker is missing
+
+
+def estimate_transcript_minutes(transcript: str) -> float:
+    """Roughly estimate transcript duration to guide model selection."""
+    words = len(transcript.split())
+    if words == 0:
+        return 0.0
+    return words / WORDS_PER_MINUTE
 
 
 def load_queue():
@@ -142,7 +163,7 @@ def load_transcript(project_name: str, transcript_file: str | None = None) -> st
     raise FileNotFoundError(f"Transcript not found for {project_name}")
 
 
-def update_manifest(project_name: str, deliverable_type: str, filename: str, agent: str, metrics: dict | None = None):
+def update_manifest(project_name: str, deliverable_type: str, filename: str, agent: str, metrics: dict | None = None, needs_review: bool = False):
     """Update project manifest with new deliverable and optional metrics"""
     manifest_path = OUTPUT_DIR / project_name / "manifest.json"
 
@@ -160,7 +181,7 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
 
         deliverable_entry = {
             "file": filename,
-            "created": datetime.utcnow().isoformat() + "Z",
+            "created": utc_now_iso(),
             "agent": agent
         }
 
@@ -173,15 +194,27 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
             if "backend" in metrics:
                 deliverable_entry["backend"] = metrics["backend"]
 
+        # Flag if this deliverable needs review
+        if needs_review:
+            deliverable_entry["needs_review"] = True
+
         manifest["deliverables"][deliverable_type] = deliverable_entry
+
+        # Track needs_review at manifest level for easy filtering
+        if needs_review:
+            manifest["needs_review"] = True
 
         # Update status
         has_brainstorming = "brainstorming" in manifest.get("deliverables", {})
         has_formatted = "formatted_transcript" in manifest.get("deliverables", {})
 
         if has_brainstorming and has_formatted:
-            manifest["status"] = "ready_for_editing"
-            manifest["processing_completed"] = datetime.utcnow().isoformat() + "Z"
+            # Use different status if review is needed
+            if manifest.get("needs_review"):
+                manifest["status"] = "needs_review"
+            else:
+                manifest["status"] = "ready_for_editing"
+            manifest["processing_completed"] = utc_now_iso()
 
             # Calculate total project cost and per-model breakdown
             total_cost = 0.0
@@ -257,7 +290,7 @@ def log_event(project_name: str, event: str, status: str, details: dict | None =
     """Append structured event for monitoring/streaming"""
     log_path = ensure_log_dir(project_name)
     payload = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": utc_now_iso(),
         "event": event,
         "status": status
     }
@@ -308,15 +341,24 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend, verbo
     Returns:
         tuple: (filename, metrics_dict)
     """
+    duration_minutes = estimate_transcript_minutes(transcript)
+    analyst_order = ["openrouter"]
+    original_prefs = BACKEND_PREFERENCES.get("analyst", [])
+    BACKEND_PREFERENCES["analyst"] = analyst_order
+
     if verbose:
         print("\n→ Running transcript-analyst agent...")
+        print(f"  ℹ Estimated duration: {duration_minutes:0.1f} minutes → {analyst_order[0]}")
     log_event(project_name, "transcript-analyst", "started")
 
     analyst_prompt_template = load_agent_prompt("transcript-analyst")
     analyst_system = "You are a professional video content analyst. Generate the brainstorming document in Markdown format exactly as specified. Do NOT output JSON. Do NOT wrap output in code blocks."
     analyst_user = f"{analyst_prompt_template}\n\n# TRANSCRIPT TO ANALYZE\n\n{transcript}"
 
-    brainstorming_raw, backend_used, metrics = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    try:
+        brainstorming_raw, backend_used, metrics = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    finally:
+        BACKEND_PREFERENCES["analyst"] = original_prefs or BACKEND_PREFERENCES["analyst"]
     brainstorming = strip_code_fences(brainstorming_raw)
 
     output_dir = OUTPUT_DIR / project_name
@@ -348,8 +390,10 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
     Returns:
         tuple: (formatted_filename, timestamp_filename, metrics_dict)
     """
+    duration_minutes = estimate_transcript_minutes(transcript)
     if verbose:
         print("\n→ Running formatter agent...")
+        print(f"  ℹ Estimated duration: {duration_minutes:0.1f} minutes")
     log_event(project_name, "formatter", "started")
 
     # Check transcript length and dynamically adjust backend preference for large transcripts
@@ -357,18 +401,19 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
     original_prefs = None
     formatter_override: list[str] | None = None
 
-    if transcript_length > FORMATTER_LARGE_TRANSCRIPT_THRESHOLD:
-        # Large transcript detected - prefer Gemini Pro (2M context) or gpt-4o for better performance
-        formatter_override = ["gemini-pro", "gemini-flash", "gemini-flash-8b", "openai", "openai-mini"]
+    long_context_needed = duration_minutes >= LONG_TRANSCRIPT_MINUTES or transcript_length > FORMATTER_LARGE_TRANSCRIPT_THRESHOLD
+
+    if long_context_needed:
+        # Large/long transcript - stick to OpenRouter auto (it will pick a suitable model)
+        formatter_override = ["openrouter"]
         if verbose:
-            print(f"  ⚠ Large transcript detected ({transcript_length:,} chars) - upgrading to Gemini Pro (2M context)")
-        log_event(project_name, "formatter", "large_transcript_detected", {"length": transcript_length, "upgrade_to": "gemini-pro"})
-    elif transcript_length > TIMESTAMP_ACCURACY_THRESHOLD:
-        # Medium/long transcript - prefer more capable model to improve timestamp alignment (Gemini-first)
-        formatter_override = ["gemini-flash", "gemini-flash-8b", "openai", "openai-mini"]
+            print(f"  ⚠ Long transcript detected ({transcript_length:,} chars, ~{duration_minutes:0.1f} min) - using OpenRouter auto for larger context")
+        log_event(project_name, "formatter", "large_transcript_detected", {"length": transcript_length, "duration_minutes": duration_minutes, "upgrade_to": "openrouter"})
+    else:
+        # Short/medium transcript - still use OpenRouter auto
+        formatter_override = ["openrouter"]
         if verbose:
-            print(f"  ⚠ Transcript {transcript_length:,} chars - upgrading formatter for better timestamp accuracy (Gemini-first)")
-        log_event(project_name, "formatter", "timestamp_upgrade", {"length": transcript_length, "upgrade_to": "gemini-flash"})
+            print(f"  ℹ Estimated duration: {duration_minutes:0.1f} minutes → openrouter (auto)")
 
     if formatter_override:
         original_prefs = BACKEND_PREFERENCES.get("formatter", [])
@@ -394,8 +439,13 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
     with open(formatted_path, "w") as f:
         f.write(formatted_transcript)
 
+    # Check if formatter flagged uncertainties for review (hidden marker or visible section)
+    needs_review = NEEDS_REVIEW_MARKER in formatted_transcript or NEEDS_REVIEW_SECTION in formatted_transcript
+
     if verbose:
         print(f"  ✓ Saved: {formatted_filename} ({len(formatted_transcript)} chars) via {backend_used}")
+        if needs_review:
+            print(f"  ⚠ Flagged for review (formatter had uncertainties)")
         print(f"  ✓ Cost: ${metrics.estimated_cost:.4f} ({metrics.total_tokens} tokens)")
 
     timestamp_filename = None
@@ -420,9 +470,9 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend, ver
         project_name,
         "formatter",
         "completed",
-        {"backend": backend_used, "timestamps_created": bool(timestamp_filename), "metrics": metrics_dict}
+        {"backend": backend_used, "timestamps_created": bool(timestamp_filename), "needs_review": needs_review, "metrics": metrics_dict}
     )
-    return formatted_filename, timestamp_filename, metrics_dict
+    return formatted_filename, timestamp_filename, metrics_dict, needs_review
 
 
 def archive_transcript(project_name: str, transcript_file: str | None = None, verbose: bool = True):
@@ -457,7 +507,7 @@ def archive_transcript(project_name: str, transcript_file: str | None = None, ve
         print(f"  ⚠ No unarchived transcript found for {project_name}")
 
 
-def process_project(project_name: str, llm: LLMBackend, verbose: bool = True, transcript_file: str | None = None):
+def process_project(project_name: str, llm: LLMBackend, verbose: bool = True, transcript_file: str | None = None) -> tuple[float, int]:
     """Process a single project with both agents"""
     if verbose:
         print(f"\n{'='*60}")
@@ -480,11 +530,11 @@ def process_project(project_name: str, llm: LLMBackend, verbose: bool = True, tr
         formatter_future = executor.submit(run_formatter_agent, project_name, transcript, llm, verbose)
 
         brainstorming_filename, analyst_metrics = analyst_future.result()
-        formatted_filename, timestamp_filename, formatter_metrics = formatter_future.result()
+        formatted_filename, timestamp_filename, formatter_metrics, needs_review = formatter_future.result()
 
     # Update manifest after both complete to avoid write races
     update_manifest(project_name, "brainstorming", brainstorming_filename, "transcript-analyst", analyst_metrics)
-    update_manifest(project_name, "formatted_transcript", formatted_filename, "formatter", formatter_metrics)
+    update_manifest(project_name, "formatted_transcript", formatted_filename, "formatter", formatter_metrics, needs_review=needs_review)
     if timestamp_filename:
         update_manifest(project_name, "timestamps", timestamp_filename, "formatter")
 
@@ -505,7 +555,7 @@ def process_project(project_name: str, llm: LLMBackend, verbose: bool = True, tr
         print(f"\n→ Archiving transcript...")
     archive_transcript(project_name, transcript_file, verbose)
 
-    return True
+    return total_cost, total_tokens
 
 
 # Constants for estimation (adjust based on LLM performance)
@@ -648,6 +698,7 @@ def main():
             estimate_info = f", est: {item['estimated_processing_minutes']} min"
         print(f"  • {item['project']} ({status_info}{estimate_info})")
 
+    log_event("system", "worker", "started", {"queue_size": len(queue)})
     print("\n" + "="*60)
     print("Starting processing...")
     print("="*60)
@@ -655,6 +706,8 @@ def main():
     # Process each project
     successful = 0
     failed = 0
+    total_run_cost = 0.0
+    total_run_tokens = 0
 
     for item in queue:
         project_name = item["project"]
@@ -665,22 +718,24 @@ def main():
 
         transcript_file = item.get("transcript_file")
 
-        start_time = datetime.utcnow().isoformat() + "Z"
+        start_time = utc_now_iso()
         update_queue_item(project_name, {"status": "processing", "started_at": start_time, "error": None})
 
         try:
-            process_project(project_name, llm, transcript_file=transcript_file)
+            job_cost, job_tokens = process_project(project_name, llm, transcript_file=transcript_file)
             update_queue_item(project_name, {
                 "status": "completed",
-                "completed_at": datetime.utcnow().isoformat() + "Z"
+                "completed_at": utc_now_iso()
             })
             successful += 1
+            total_run_cost += job_cost
+            total_run_tokens += job_tokens
         except Exception as e:
             print(f"\n✗ Error processing {project_name}: {e}")
             update_queue_item(project_name, {
                 "status": "failed",
                 "error": str(e),
-                "completed_at": datetime.utcnow().isoformat() + "Z"
+                "completed_at": utc_now_iso()
             })
             log_event(project_name, "project", "failed", {"error": str(e)})
             failed += 1
@@ -692,7 +747,15 @@ def main():
     print(f"\n✓ Successful: {successful}")
     if failed > 0:
         print(f"✗ Failed: {failed}")
+    print(f"\nTotal cost this run: ${total_run_cost:.4f}")
+    print(f"Total tokens this run: {total_run_tokens}")
 
+    log_event("system", "worker", "completed", {
+        "successful": successful,
+        "failed": failed,
+        "total_cost": total_run_cost,
+        "total_tokens": total_run_tokens
+    })
     print("\nNext step: Run ./scripts/finalize-queue.sh to archive transcripts")
 
     return 0 if failed == 0 else 1

@@ -868,3 +868,27 @@ Ready for agent processing in Claude Code
   [0;32m✓[0m Added to processing queue
   [1;33m→[0m Run in Claude Code: "Process all items in .processing-requests.json"
 
+[0;36m╔════════════════════════════════════════════════════════╗[0m
+[0;36m║   Editorial Assistant - Transcript Folder Watcher     ║[0m
+[0;36m╚════════════════════════════════════════════════════════╝[0m
+
+[0;34mWatching:[0m /Users/mriechers/Developer/editorial-assistant/transcripts
+[0;34mCheck interval:[0m 10s
+[0;34mState file:[0m /Users/mriechers/Developer/editorial-assistant/.watch-state
+
+[1;33mPress Ctrl+C to stop watching[0m
+
+[0;32m✓[0m Watcher started (PID: 61938)
+
+[0;36m╔════════════════════════════════════════════════════════╗[0m
+[0;36m║   Editorial Assistant - Transcript Folder Watcher     ║[0m
+[0;36m╚════════════════════════════════════════════════════════╝[0m
+
+[0;34mWatching:[0m /Users/mriechers/Developer/editorial-assistant/transcripts
+[0;34mCheck interval:[0m 10s
+[0;34mState file:[0m /Users/mriechers/Developer/editorial-assistant/.watch-state
+
+[1;33mPress Ctrl+C to stop watching[0m
+
+[0;32m✓[0m Watcher started (PID: 963)
+

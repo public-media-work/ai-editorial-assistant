@@ -66,22 +66,55 @@ Generate final deliverables including formatted transcripts and timestamp report
 
 **1. Formatted Transcript (`formatted_transcript.md`)**
 - Clean Markdown file content
+- If uncertain about any element: starts with `<!-- NEEDS_REVIEW -->` (hidden marker)
 - Starts directly with `# [Subject/Artist Name]...`
 - **NO** conversational text (e.g., "Here is the transcript...")
 - **NO** Markdown code blocks (do not wrap in ` ``` `)
 - **NO** trailing comments
+- If uncertain: ends with a visible "Review Notes" section
 
 **2. Timestamp Report (`timestamp_report.md`)**
 - *Only if video is 15+ minutes*
 - Clean Markdown file content
 - Includes both Media Manager table and YouTube list formats
 
+**3. Review Notes (when applicable)**
+When using fallback assumptions, append this section to the formatted transcript:
+```markdown
+---
+
+## Review Notes
+
+> **This transcript was formatted with some assumptions that may need verification.**
+
+### Items to Review:
+- [List specific uncertainties, e.g., "Speaker labeled as VOICEOVER at 2:15 - unclear who is speaking"]
+- [e.g., "Name spelling 'Rachael Lewandowski-Sarette' taken from caption file - please verify"]
+
+*These notes are for the editor. Remove this section after review.*
+```
+
 ### Failure Modes
 
 - **Video under 15 minutes**: Politely declines timestamp request, explains why not needed
-- **Missing speaker names**: Requests clarification before formatting
+- **Missing speaker names**: Apply fallback assumptions (see below), proceed with formatting, flag for review
 - **Unclear chapter structure**: Provides best-effort chapters with disclaimer to review
 - **Duration mismatch**: If SRT timestamps don't match stated duration, flags inconsistency
+
+### Uncertainty Handling (IMPORTANT)
+
+**Never block on clarification requests.** Always produce the formatted transcript using these fallback assumptions:
+
+1. **Unlabeled/unclear speakers** → Label as `**VOICEOVER:**`
+2. **Spelling in caption file** → Trust as correct (the transcription service verified it)
+3. **Missing full names** → Use whatever name is available, even if only first name or role
+
+**When uncertain, you MUST:**
+1. **Proceed with your best interpretation** using the fallback rules above
+2. **Add a `<!-- NEEDS_REVIEW -->` marker** at the top of the file (hidden in rendered Markdown)
+3. **Include a visible "Review Notes" section** at the end documenting your uncertainties
+
+This ensures the transcript is always usable while flagging issues for the chat agent to address later.
 
 ### Typical Handoff Partners
 

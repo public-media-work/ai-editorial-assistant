@@ -14,7 +14,7 @@ import termios
 import subprocess
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock, Thread
 
@@ -161,11 +161,10 @@ state = None
 # --- CORE LOGIC (Adapted) ---
 
 # Optional per-agent backend preferences; falls back to llm-config auto_select order
-# analyst: Use cheap model for brainstorming
-# formatter: Prefer Gemini Flash (1M context, fast, cheap) for formatting large transcripts
+# Keep it simple: rely on OpenRouter auto to balance cost/performance
 BACKEND_PREFERENCES = {
-    "analyst": ["openai-mini", "gemini-flash-8b"],
-    "formatter": ["gemini-flash", "openai-mini"]
+    "analyst": ["openrouter"],
+    "formatter": ["openrouter"]
 }
 
 # Transcript length threshold for auto-upgrading formatter to gpt-4o (in characters)
@@ -176,11 +175,28 @@ FORMATTER_LARGE_TRANSCRIPT_THRESHOLD = 200000
 # Strip triple-backtick fences from LLM outputs.
 CODE_FENCE_PATTERN = re.compile(r"```[a-zA-Z0-9_+-]*\s*\n(.*?)\n```", re.DOTALL)
 
+WORDS_PER_MINUTE = 170  # Speech heuristic for duration estimates
+LONG_TRANSCRIPT_MINUTES = 15  # Upgrade to larger-context Gemini after this point
+
 
 def strip_code_fences(content: str) -> str:
     cleaned = CODE_FENCE_PATTERN.sub(r"\1\n", content)
     cleaned = cleaned.replace("```", "")
     return cleaned.strip() + "\n"
+
+def utc_now_iso(timespec: str | None = None) -> str:
+    """Timezone-aware UTC timestamp with trailing Z."""
+    now = datetime.now(timezone.utc)
+    iso = now.isoformat(timespec=timespec) if timespec else now.isoformat()
+    return iso.replace("+00:00", "Z")
+
+
+def estimate_transcript_minutes(transcript: str) -> float:
+    """Roughly estimate transcript duration to guide model selection."""
+    words = len(transcript.split())
+    if words == 0:
+        return 0.0
+    return words / WORDS_PER_MINUTE
 
 # Add helper to load prefixes
 PROGRAM_PREFIXES = {}
@@ -453,14 +469,14 @@ def update_manifest(project_name: str, deliverable_type: str, filename: str, age
             manifest["deliverables"] = {}
         manifest["deliverables"][deliverable_type] = {
             "file": filename,
-            "created": datetime.utcnow().isoformat() + "Z",
+            "created": utc_now_iso(),
             "agent": agent
         }
         has_brainstorming = "brainstorming" in manifest.get("deliverables", {})
         has_formatted = "formatted_transcript" in manifest.get("deliverables", {})
         if has_brainstorming and has_formatted:
             manifest["status"] = "ready_for_editing"
-            manifest["processing_completed"] = datetime.utcnow().isoformat() + "Z"
+            manifest["processing_completed"] = utc_now_iso()
         with open(manifest_path, "w") as f:
             json.dump(manifest, f, indent=2)
 
@@ -481,7 +497,7 @@ def ensure_log_dir(project_name: str) -> Path:
 def log_event(project_name: str, event: str, status: str, details: dict | None = None):
     log_path = ensure_log_dir(project_name)
     payload = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": utc_now_iso(),
         "event": event,
         "status": status
     }
@@ -532,6 +548,11 @@ def run_with_fallback(agent_key: str, prompt: str, system: str, llm: LLMBackend)
     raise Exception(f"All backends failed: {' | '.join(errors)}")
 
 def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend) -> str:
+    duration_minutes = estimate_transcript_minutes(transcript)
+    analyst_order = ["openrouter"]
+    original_prefs = BACKEND_PREFERENCES.get("analyst", [])
+    BACKEND_PREFERENCES["analyst"] = analyst_order
+
     state.set_progress(0, "Starting analyst agent...")
     state.set_active(project_name, "Running analyst agent...", "transcript-analyst")
 
@@ -541,8 +562,12 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend) -> st
     analyst_system = "You are a professional video content analyst. Generate the brainstorming document in Markdown format exactly as specified. Do NOT output JSON. Do NOT wrap output in code blocks."
     analyst_user = f"{analyst_prompt_template}\n\n# TRANSCRIPT TO ANALYZE\n\n{transcript}"
 
+    state.log(f"ℹ Estimated duration: {duration_minutes:0.1f} minutes → {analyst_order[0]}", "INFO")
     state.set_progress(80, "Processing LLM response...")
-    brainstorming_raw, backend_used, cost = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    try:
+        brainstorming_raw, backend_used, cost = run_with_fallback("analyst", analyst_user, analyst_system, llm)
+    finally:
+        BACKEND_PREFERENCES["analyst"] = original_prefs or BACKEND_PREFERENCES["analyst"]
     brainstorming = strip_code_fences(brainstorming_raw)
     state.add_cost(cost)
 
@@ -558,6 +583,7 @@ def run_analyst_agent(project_name: str, transcript: str, llm: LLMBackend) -> st
     return brainstorming_filename
 
 def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend) -> tuple[str, str | None]:
+    duration_minutes = estimate_transcript_minutes(transcript)
     state.set_progress(0, "Starting formatter agent...")
     state.set_active(project_name, "Running formatter agent...", "formatter")
 
@@ -566,15 +592,20 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend) -> 
 
     # Check transcript length and dynamically adjust backend preference for large transcripts
     transcript_length = len(transcript)
-    if transcript_length > FORMATTER_LARGE_TRANSCRIPT_THRESHOLD:
-        # Large transcript detected - prefer Gemini Pro (2M context) for better performance
-        state.log(f"⚠ Large transcript ({transcript_length:,} chars) - upgrading to Gemini Pro (2M)", "INFO")
-        log_event(project_name, "formatter", "large_transcript_detected", {"length": transcript_length, "upgrade_to": "gemini-pro"})
-        # Temporarily override backend preference for this call
-        original_prefs = BACKEND_PREFERENCES.get("formatter", [])
-        BACKEND_PREFERENCES["formatter"] = ["gemini-pro", "gemini-flash", "openai", "openai-mini"]  # Try Gemini Pro first
+    original_prefs = BACKEND_PREFERENCES.get("formatter", [])
+    formatter_override: list[str] | None = None
+
+    long_context_needed = duration_minutes >= LONG_TRANSCRIPT_MINUTES or transcript_length > FORMATTER_LARGE_TRANSCRIPT_THRESHOLD
+
+    if long_context_needed:
+        formatter_override = ["openrouter"]
+        state.log(f"⚠ Long transcript ({transcript_length:,} chars, ~{duration_minutes:0.1f} min) - using OpenRouter auto for larger context", "INFO")
+        log_event(project_name, "formatter", "large_transcript_detected", {"length": transcript_length, "duration_minutes": duration_minutes, "upgrade_to": "openrouter"})
     else:
-        original_prefs = None
+        formatter_override = ["openrouter"]
+        state.log(f"ℹ Estimated duration: {duration_minutes:0.1f} minutes → openrouter (auto)", "INFO")
+
+    BACKEND_PREFERENCES["formatter"] = formatter_override
 
     formatter_prompt_template = load_agent_prompt("formatter")
     formatter_system = "You are a professional transcript formatter applying AP Style guidelines. Output raw Markdown only. Do NOT use code blocks (```). Do NOT add conversational text."
@@ -586,8 +617,7 @@ def run_formatter_agent(project_name: str, transcript: str, llm: LLMBackend) -> 
         state.add_cost(cost)
     finally:
         # Restore original preferences if we changed them
-        if original_prefs is not None:
-            BACKEND_PREFERENCES["formatter"] = original_prefs
+        BACKEND_PREFERENCES["formatter"] = original_prefs
 
     state.set_progress(100, "Formatter complete")
     formatted_transcript_raw, timestamp_report_raw = extract_formatted_transcript_and_timestamps(formatter_output)
@@ -1048,7 +1078,7 @@ def restart_dashboard(state: DashboardState, console: Console):
     try:
         with open(RESTART_MARKER, 'w') as f:
             json.dump({
-                "restart_time": datetime.utcnow().isoformat() + "Z",
+                "restart_time": utc_now_iso(),
                 "reason": "user_requested"
             }, f)
         console.print("[green]✓ Restart marker created[/]")
@@ -1337,7 +1367,7 @@ def main():
                 item = pending_items[0]
                 project_name = item["project"]
                 
-                start_time = datetime.utcnow().isoformat() + "Z"
+                start_time = utc_now_iso()
                 update_queue_item(project_name, {"status": "processing", "started_at": start_time, "error": None})
                 
                 try:
@@ -1359,7 +1389,7 @@ def main():
 
                     update_queue_item(project_name, {
                         "status": "completed",
-                        "completed_at": datetime.utcnow().isoformat() + "Z",
+                        "completed_at": utc_now_iso(),
                         "cost": final_cost
                     })
                     successful += 1
@@ -1391,7 +1421,7 @@ def main():
                     update_queue_item(project_name, {
                         "status": "failed",
                         "error": error_msg,
-                        "completed_at": datetime.utcnow().isoformat() + "Z"
+                        "completed_at": utc_now_iso()
                     })
                     failed += 1
                 
