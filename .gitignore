@@ -1,57 +1,9 @@
 # macOS
 .DS_Store
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-*.egg-info/
-dist/
-build/
-
-# Node.js
-node_modules/
-
-# Project-specific: Transcripts directory
-# Keep folder structure and examples, ignore actual input files
-transcripts/*
-!transcripts/.gitkeep
-!transcripts/examples/
-!transcripts/archive/
-transcripts/archive/*
-!transcripts/archive/.gitkeep
-
-# Project-specific: Output directory (note: uppercase OUTPUT/)
-# Keep folder structure and examples, ignore actual output projects
-OUTPUT/*
-!OUTPUT/.gitkeep
-!OUTPUT/examples/
-!OUTPUT/archive/
-OUTPUT/archive/*
-!OUTPUT/archive/.gitkeep
-
-# Processing state files (machine-specific)
-.processing-requests.json
-.processing-log.json
-.watch-state
-
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# Environment
-.env
-.env.local
-
-# Logs
-
-# Database
-dashboard.db
-
-

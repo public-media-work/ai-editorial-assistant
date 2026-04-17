@@ -1,3 +1,0 @@
-- Better project knowledge — more complete AP Style Guide or similar composition resource
-- Different model — Claude is a good writer, but there are other models that are better at data analysis (ChatGPT), or at sticking to a defined dataset or collection of reference materials (RAG model, probably something that would require developer)
-- Batch editing — for example, editing a bunch of copy from a related project, where SEO data from one video can inform editing of others. 
