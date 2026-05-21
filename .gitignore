@@ -1,3 +1,9 @@
+# Judge archive — raw transcripts/outputs MUST NOT be committed.
+# This is a public repo; raw data lives in the private second-brain repo
+# at services/crows-nest/data/judge_archive/. Only README.md is tracked.
+data/judge_archive/*.jsonl
+data/judge_archive/findings.md
+
 # macOS
 .DS_Store
 
